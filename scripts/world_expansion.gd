@@ -1,0 +1,165 @@
+extends "res://scripts/world.gd"
+
+var pois: Array[Dictionary] = [
+	{"id":"home","title":"07 号护林小屋","at":Vector3(0,0,18),"story":"窗缝漏着风，床铺已经破损。找些木柴、布料和废金属，让这里重新成为一个家。"},
+	{"id":"wreck","title":"被遗弃的邮递车","at":Vector3(-14,0,-43),"story":"座椅下藏着一台旧磁带机。标签上写着：如果你听见了，就继续向前走。"},
+	{"id":"hunters","title":"猎人的旧营地","at":Vector3(22,0,-62),"story":"帐棚还在，火早已熄了。背包里有布料、药草和一盘名叫《归途》的磁带。"},
+	{"id":"lookout","title":"林道观测点","at":Vector3(28,0,-115),"story":"风吹过断裂的观测仪。箱子里有电池和《步履》，也许能帮你走得更远。"},
+	{"id":"depot","title":"废弃物资堆场","at":Vector3(-15,0,-128),"story":"几只木箱埋在雪里。生锈的金属和旧布料，如今比钱更有用。"},
+	{"id":"station","title":"北岭维修站","at":Vector3(0,0,-170),"story":"无线电备用零件仍然完好。修复信号之后，可以继续探索林区、加固庇护所，等待救援。"}
+]
+var structure_root:Node3D
+var improvement_root:Node3D
+var upgrades_signature := ""
+var structure_signature := ""
+var camp_positions:Dictionary = {}
+var camp_roofs:Dictionary = {}
+var fire_particles:Dictionary={}
+var flames:Array[MeshInstance3D]=[]
+
+func _ready()->void:
+	super._ready()
+	structure_root=Node3D.new();structure_root.name="BuiltCamps";add_child(structure_root)
+	improvement_root=Node3D.new();improvement_root.name="ShelterRepairs";add_child(improvement_root)
+	add_loot("home_supplies",Vector3(5.3,0,23),"门廊里的旧工具箱",{"wood":3,"cloth":5,"scrap":3})
+	add_loot("timber_south",Vector3(-7,0,-3),"倒木 · 收集干柴",{"wood":3})
+	add_loot("cloth_south",Vector3(12,0,-20),"挂在树上的旧行囊",{"cloth":3,"food":1})
+	add_loot("wreck_player",Vector3(-13,0,-41),"邮递车里的皮包",{"player":1,"tape_embers":1,"battery":1})
+	add_loot("wreck_food",Vector3(-16,0,-44),"旧食品箱",{"food":2,"water":1})
+	add_loot("herbs_1",Vector3(15,0,-42),"雪下的干药草",{"herb":3})
+	add_loot("hunter_pack",Vector3(20,0,-61),"猎人的背包",{"cloth":3,"tape_home":1,"herb":2})
+	add_loot("hunter_wood",Vector3(25,0,-59),"备用柴堆",{"wood":3})
+	add_loot("river_water",Vector3(8,0,-78),"被遗落的水壶",{"water":2})
+	add_loot("lookout_case",Vector3(28,0,-113),"观测员的金属盒",{"battery":2,"tape_stride":1,"bandage":1})
+	add_loot("depot_crate",Vector3(-16,0,-126),"拆卸过的器材箱",{"scrap":5,"cloth":3})
+	add_loot("depot_wood",Vector3(-12,0,-130),"干燥的木板",{"wood":4})
+	add_loot("station_rations",Vector3(6,0,-158),"维修工的应急箱",{"food":2,"water":2,"herb":2})
+	add_point("workbench","workbench",Vector3(-2.5,.8,20.5),"工作台 · 制作与修缮")
+	box(Vector3(-2.7,.4,20.5),Vector3(1.4,.8,.75),"35414a",true)
+	add_point("home_bed","rest",Vector3(-2.4,.7,15.8),"床铺 · 休息")
+	add_point("station_bed","rest",Vector3(-2.4,.7,-172.2),"维修间床铺 · 休息")
+	make_tent(Vector3(22,terrain_height(22,-62),-62),"hunters",self)
+	# A distinctive delivery van makes the optional cassette discovery legible.
+	var van:=Node3D.new();van.position=Vector3(-14,terrain_height(-14,-43),-43);add_child(van)
+	box(Vector3(0,.65,0),Vector3(1.8,1,3.8),"3a4d58",true,van)
+	box(Vector3(0,1.4,-.65),Vector3(1.75,.65,1.5),"293c4a",true,van)
+	box(Vector3(0,1.8,-.5),Vector3(1.9,.17,1.9),"a0afbd",false,van)
+	box(Vector3(0,1.42,.12),Vector3(1.45,.4,.04),"1d2b3b",false,van)
+	for x in [-.86,.86]:
+		for z in [-1.25,1.2]:
+			var wheel:=MeshInstance3D.new();var cylinder:=CylinderMesh.new();cylinder.top_radius=.35;cylinder.bottom_radius=.35;cylinder.height=.23;cylinder.radial_segments=12;wheel.mesh=cylinder;wheel.rotation.z=PI/2;wheel.position=Vector3(x,.35,z);wheel.material_override=mat("152437");van.add_child(wheel)
+	for x in [-17,-14,-11]:
+		box(Vector3(x,terrain_height(x,-128)+.35,-128),Vector3(1.5,.7,1.1),"454b4d",true)
+		box(Vector3(x,terrain_height(x,-128)+.74,-128),Vector3(1.6,.08,1.2),"8495a9")
+	box(Vector3(29,terrain_height(29,-116)+1.5,-116),Vector3(.2,3,.2),"263b4d",true)
+	box(Vector3(29,terrain_height(29,-116)+2.9,-116),Vector3(2,.2,.25),"69798a")
+	fence(Vector3(-20,0,-133),4)
+	for z in [-5,-36,-101,-142]:
+		var log:=box(Vector3(-5,.26,z),Vector3(2.8,.38,.45),"3b3c41");log.rotation.y=.35
+		box(Vector3(-5,.48,z),Vector3(2.7,.12,.32),"889aad")
+	for id in fire_lights:add_flames(id)
+
+func add_loot(id:String,at:Vector3,title:String,contents:Dictionary)->void:
+	var root:=Node3D.new();root.position=Vector3(at.x,terrain_height(at.x,at.z),at.z);add_child(root)
+	box(Vector3(0,.23,0),Vector3(.85,.46,.62),"4e4b43",false,root)
+	box(Vector3(0,.48,0),Vector3(.9,.05,.66),"8797a8",false,root)
+	for x in [-.28,.28]:box(Vector3(x,.25,.32),Vector3(.05,.46,.035),"273746",false,root)
+	var marker:=sign_text("◇",Vector3(0,1,0),25,root);marker.billboard=BaseMaterial3D.BILLBOARD_ENABLED;marker.modulate=Color("d3b684")
+	points.append({"id":id,"kind":"loot","position":root.position+Vector3(0,.6,0),"title":title,"node":root,"contents":contents})
+
+func make_tent(at:Vector3,id:String,parent:Node3D)->void:
+	var tent:=Node3D.new();tent.position=at;parent.add_child(tent)
+	for x in [-1.7,1.7]:
+		for z in [-1.7,1.7]:box(Vector3(x,1,z),Vector3(.09,2,.09),"39434a",true,tent)
+	var roof:=box(Vector3(0,2.1,0),Vector3(4.2,.09,4.4),"58616b",false,tent);roof.rotation.z=-.12
+	camp_roofs[id]=roof
+	box(Vector3(0,1,-1.8),Vector3(3.6,1.8,.05),"444d58",false,tent)
+	box(Vector3(-.6,.08,-.4),Vector3(1,.15,2),"6f776c",false,tent)
+	for i in range(9):
+		var angle:=TAU*i/9.0
+		var stone:=box(Vector3(1.05+cos(angle)*.48,.11,.8+sin(angle)*.48),Vector3(.25,.21,.25),"374252",false,tent);stone.rotation.y=angle
+	box(Vector3(1.05,.12,.8),Vector3(.65,.15,.38),"433b33",false,tent)
+	var flame:=cone(Vector3(1.05,.5,.8),.23,.8,"efb061",tent);flame.visible=false
+	var glow:=OmniLight3D.new();glow.position=Vector3(1.05,1,.8);glow.light_color=Color("ffb166");glow.omni_range=7;glow.light_energy=0;tent.add_child(glow)
+	fire_lights[id]=glow;fire_meshes[id]=flame
+	add_point(id,"fire",at+Vector3(1.05,.6,1.3),"营火 · 添入一份木柴")
+	camp_positions[id]=at
+	add_flames(id)
+
+func add_flames(id:String)->void:
+	if fire_particles.has(id):return
+	var sparks:=CPUParticles3D.new();sparks.amount=22;sparks.lifetime=.85
+	sparks.emission_shape=CPUParticles3D.EMISSION_SHAPE_SPHERE;sparks.emission_sphere_radius=.16
+	sparks.direction=Vector3.UP;sparks.spread=12;sparks.gravity=Vector3(0,.2,0)
+	sparks.initial_velocity_min=.35;sparks.initial_velocity_max=.8
+	sparks.scale_amount_min=.05;sparks.scale_amount_max=.13
+	var mesh:=SphereMesh.new();mesh.radius=.5;mesh.height=1.2;mesh.radial_segments=6;mesh.rings=3;sparks.mesh=mesh
+	var material:=StandardMaterial3D.new();material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;material.vertex_color_use_as_albedo=true;material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;sparks.material_override=material
+	var gradient:=Gradient.new();gradient.colors=PackedColorArray([Color(1,.65,.16,.9),Color(1,.3,.025,.8),Color(.5,.12,.015,0)]);gradient.offsets=PackedFloat32Array([0,.35,1]);sparks.color_ramp=gradient
+	var host:Node3D=fire_meshes[id].get_parent();host.add_child(sparks);sparks.position=fire_meshes[id].position-Vector3(0,.25,0)
+	sparks.emitting=false;fire_particles[id]=sparks
+
+func shelter_at(at:Vector3)->String:
+	var base:=super.shelter_at(at)
+	if not base.is_empty():return base
+	for id in camp_positions:
+		var p:Vector3=camp_positions[id]
+		if absf(at.x-p.x)<1.85 and absf(at.z-p.z)<1.9:return id
+	return ""
+
+func candidate_camp(at:Vector3)->Array:
+	for offset in [Vector3(4.8,0,0),Vector3(-4.8,0,0),Vector3(0,0,4.8),Vector3(0,0,-4.8)]:
+		var p:Vector3=at+offset;p.y=terrain_height(p.x,p.z)
+		if camp_spot_valid(p):return [p.x,p.y,p.z]
+	return []
+
+func camp_spot_valid(p:Vector3)->bool:
+	if absf(p.x)>82 or p.z>39 or p.z< -198 or absf(p.z+86)<12:return false
+	if absf(p.x)<3.8 and p.z< -5 and p.z> -170:return false
+	if absf(p.x-22)<2.8 and p.z< -15 and p.z> -150:return false
+	for poi in pois:
+		if p.distance_to(poi.at)<10:return false
+	for pos in camp_positions.values():
+		if p.distance_to(pos)<9:return false
+	for offset in [Vector2(-2,-2),Vector2(2,-2),Vector2(-2,2),Vector2(2,2)]:
+		if absf(terrain_height(p.x+offset.x,p.z+offset.y)-p.y)>.35:return false
+	var query:=PhysicsShapeQueryParameters3D.new();var shape:=BoxShape3D.new();shape.size=Vector3(4.6,1.8,4.6);query.shape=shape;query.transform.origin=p+Vector3(0,1.4,0)
+	return get_world_3d().direct_space_state.intersect_shape(query,1).is_empty()
+
+func sync_buildings(state)->void:
+	var sig:=JSON.stringify(state.structures)
+	if sig!=structure_signature:
+		structure_signature=sig
+		for node in structure_root.get_children():structure_root.remove_child(node);node.queue_free()
+		points=points.filter(func(p:Dictionary)->bool:return not str(p.id).begins_with("camp_"))
+		for id in camp_positions.keys():
+			if str(id).begins_with("camp_"):camp_positions.erase(id);camp_roofs.erase(id);fire_lights.erase(id);fire_meshes.erase(id);fire_particles.erase(id)
+		for structure in state.structures:
+			var p:Array=structure.position
+			make_tent(Vector3(p[0],p[1],p[2]),structure.id,structure_root)
+	var up_sig:=JSON.stringify(state.upgrades)
+	if up_sig!=upgrades_signature:
+		upgrades_signature=up_sig
+		for node in improvement_root.get_children():improvement_root.remove_child(node);node.queue_free()
+		if state.upgrades.insulation:
+			for x in [-2.6,2.6]:
+				for y in [1.45,1.75,2.05]:box(Vector3(x,y,22.32),Vector3(1.24,.19,.07),"826f53",false,improvement_root)
+		if state.upgrades.bed:
+			box(Vector3(-2.4,.65,15.8),Vector3(1.5,.2,2),"677c74",false,improvement_root)
+			box(Vector3(-2.4,.8,15.1),Vector3(1.1,.15,.45),"b4b1a0",false,improvement_root)
+		if state.upgrades.storage:
+			box(Vector3(2.4,.4,20.4),Vector3(1.2,.8,.8),"736147",true,improvement_root)
+			box(Vector3(2.4,.83,20.4),Vector3(1.3,.08,.86),"8a7b60",false,improvement_root)
+
+func weather_update(storm:float,at:Vector3,fires:Dictionary)->void:
+	# Ensure legacy saves lacking a camp fire still render safely.
+	var all_fires:=fires.duplicate()
+	for id in fire_lights:
+		if not all_fires.has(id):all_fires[id]=0.0
+	super.weather_update(storm,at,all_fires)
+	for id in camp_roofs:camp_roofs[id].visible=shelter_at(at)!=id
+	for id in fire_particles:
+		var burning:bool=float(all_fires.get(id,0))>0
+		fire_particles[id].emitting=burning
+		if camp_positions.has(id):fire_meshes[id].visible=false
+		if burning:fire_lights[id].light_energy=1.8+sin(Time.get_ticks_msec()*.012)*.15

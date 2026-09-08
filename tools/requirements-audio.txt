@@ -1,0 +1,4 @@
+# Observed working Windows toolchain; install native wheels into a per-device venv.
+numpy==2.5.3
+scipy==1.18.1
+soundfile==0.14.0

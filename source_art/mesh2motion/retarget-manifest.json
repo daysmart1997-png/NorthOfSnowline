@@ -1,0 +1,55 @@
+{
+  "source_url": "https://github.com/Mesh2Motion/mesh2motion-app/tree/main/static/animations",
+  "license": "CC0 (upstream README)",
+  "retarget": "Mesh2Motion upper-body and interaction adaptation; v04 locomotion legs rebuilt with symmetric analytic IK and continuous pelvis trajectory",
+  "clips": [
+    {
+      "source": "Idle_A",
+      "exported": "Ranger_Idle",
+      "frames": 95,
+      "fps": 30
+    },
+    {
+      "source": "Walk",
+      "exported": "Ranger_Walk",
+      "frames": 51,
+      "fps": 30
+    },
+    {
+      "source": "Sprint",
+      "exported": "Ranger_Run",
+      "frames": 26,
+      "fps": 30
+    },
+    {
+      "source": "Crouch_Idle",
+      "exported": "Ranger_CrouchIdle",
+      "frames": 111,
+      "fps": 30
+    },
+    {
+      "source": "Crouch_Walk",
+      "exported": "Ranger_CrouchWalk",
+      "frames": 76,
+      "fps": 30
+    },
+    {
+      "source": "PickUp_Table",
+      "exported": "Ranger_Pickup",
+      "frames": 33,
+      "fps": 30
+    },
+    {
+      "source": "Interact",
+      "exported": "Ranger_Interact",
+      "frames": 76,
+      "fps": 30
+    },
+    {
+      "source": "Consume",
+      "exported": "Ranger_Consume",
+      "frames": 41,
+      "fps": 30
+    }
+  ]
+}

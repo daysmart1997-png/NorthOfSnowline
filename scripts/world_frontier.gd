@@ -1,0 +1,174 @@
+extends "res://scripts/world_polish.gd"
+const Terrain=preload("res://scripts/terrain_profile.gd")
+var buildings:Dictionary={}
+var last_sole:Dictionary={}
+var building_materials:Dictionary={}
+var biome_texture:ImageTexture
+
+func terrain_height(x:float,z:float)->float:return Terrain.height(x,z)
+func snow_depth(at:Vector3)->float:return Terrain.snow(at.x,at.z)
+func slope_at(at:Vector3)->float:return Terrain.slope(at.x,at.z)
+func normal_at(at:Vector3)->Vector3:return Terrain.normal(at.x,at.z)
+
+func tree(at:Vector3,scale_value:float)->void:
+	if Terrain.lake_weight(at.x,at.z)>.6:return
+	super.tree(at,scale_value)
+
+func terrain_name(at:Vector3)->String:
+	if Terrain.lake_weight(at.x,at.z)>.8:return "冻湖 · 冰面"
+	if snow_depth(at)>.32:return "背风低洼 · 深雪"
+	if terrain_height(at.x,at.z)>3:return "林区高地"
+	if slope_at(at)>.2:return "起伏坡地"
+	return "林间雪道"
+
+func travel_factor(at:Vector3,motion:Vector3)->float:
+	var depth:=snow_depth(at)
+	var uphill:=maxf(0,-normal_at(at).dot(motion.normalized()))
+	return clampf(1-depth*.38-uphill*.26,.62,1)
+
+func surface_at(at:Vector3)->String:
+	if shelter_at(at) in ["home","station"]:return "wood"
+	if absf(at.x)<1.5 and ((at.z>22 and at.z<25.0) or (at.z> -166 and at.z< -163)):return "wood"
+	if absf(at.x)<2.4 and absf(at.z+86)<9.3:return "wood"
+	if Terrain.lake_weight(at.x,at.z)>.8:return "ice"
+	return "deep" if snow_depth(at)>.28 else "snow"
+
+func _ready()->void:
+	super._ready()
+	var bridge:Node3D=load("res://assets/architecture/bridge.glb").instantiate();bridge.name="TimberTrestleBridge";bridge.position=Vector3(0,0,-86);add_child(bridge);apply_building_materials(bridge)
+	invisible_wall(Vector3(0,.025,-86),Vector3(4.8,.19,18.7))
+	for x in [-2.28,2.28]:invisible_wall(Vector3(x,.68,-86),Vector3(.13,1.3,18.5))
+	for side in [-1,1]:
+		var ramp:=StaticBody3D.new();var collision:=CollisionShape3D.new();var shape:=ConvexPolygonShape3D.new();var vertices:=PackedVector3Array()
+		for x in [-2.4,2.4]:
+			for p in [Vector2(9.3,.12),Vector2(10.4,0),Vector2(9.3,-.2),Vector2(10.4,-.2)]:vertices.append(Vector3(x,p.y,-86+side*p.x))
+		shape.points=vertices;collision.shape=shape;ramp.add_child(collision);add_child(ramp)
+		var ramp_mesh:=SurfaceTool.new();ramp_mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for p in [Vector3(-2.4,.12,9.3),Vector3(2.4,.12,9.3),Vector3(-2.4,0,10.4),Vector3(2.4,.12,9.3),Vector3(2.4,0,10.4),Vector3(-2.4,0,10.4)]:ramp_mesh.add_vertex(Vector3(p.x,p.y,-86+p.z*side))
+		ramp_mesh.generate_normals();var deck:=MeshInstance3D.new();deck.mesh=ramp_mesh.commit();deck.material_override=mat("665f50");add_child(deck)
+	pois.append_array([
+		{"id":"ridge","title":"西岭高地","at":Vector3(-34,terrain_height(-34,-36),-36),"story":"风把岭脊的雪吹得很薄。从这里能认出冻湖与旧桥，返程时也能望见小屋。"},
+		{"id":"hollow","title":"背风洼地","at":Vector3(40,terrain_height(40,-43),-43),"story":"雪在洼地里积得更厚，靴子会拖出两道沟痕。绕到高处更省力。"},
+		{"id":"lake","title":"白桦冻湖","at":Vector3(-28,-1.65,-89),"story":"冰层封住了湖湾。东侧的旧木桥连接两岸，桥脚还能看出林场的铁件与石墩。"}
+	])
+	add_loot("ridge_cache",Vector3(-32,0,-35),"高地巡林员的补给",{"food":2,"cloth":2})
+	add_loot("hollow_cache",Vector3(38,0,-43),"陷在深雪中的背包",{"herb":2,"wood":2})
+	add_loot("lake_cache",Vector3(-13,0,-72),"湖畔的旧木箱",{"battery":1,"scrap":2})
+
+func build_terrain()->void:
+	super.build_terrain()
+	detail_mesh.custom_aabb=AABB(Vector3(-12,-5,-12),Vector3(24,20,24))
+	var image:=Image.create(441,581,false,Image.FORMAT_RG8)
+	for z in range(581):
+		for x in range(441):
+			var px:float=-110+x*.5;var pz:float=-225+z*.5
+			image.set_pixel(x,z,Color(Terrain.snow(px,pz)/.65,Terrain.lake_weight(px,pz),0))
+	biome_texture=ImageTexture.create_from_image(image)
+	for material in [snow_surface,detail_surface]:material.set_shader_parameter("biomes",biome_texture)
+
+func box(at:Vector3,extent:Vector3,color:String,collision:=false,parent:Node3D=self)->MeshInstance3D:
+	var object:=super.box(at,extent,color,collision,parent)
+	# Replaced by actual lake terrain, trestle bridge and imported cabin furnishings.
+	if (extent.x>170 and absf(at.z+86)<.1) or (extent.x==5.0 and extent.z==16.0):object.visible=false
+	if is_equal_approx(extent.x,4.5) and is_equal_approx(extent.z,28):object.visible=false
+	if parent.name=="ShelterRepairs":object.visible=false
+	if is_equal_approx(at.x,-2.7) and is_equal_approx(at.z,20.5):object.visible=false
+	if (is_equal_approx(at.x,-2.5) and is_equal_approx(at.z,17)) or (is_equal_approx(at.x,-2.3) and is_equal_approx(at.z,16.76)):object.visible=false
+	return object
+
+func apply_building_materials(root:Node3D)->void:
+	for node in root.find_children("*","MeshInstance3D",true,false):
+		for i in range(node.mesh.get_surface_count()):
+			var original:Material=node.mesh.surface_get_material(i)
+			if original is StandardMaterial3D and original.resource_name.begins_with("Timber"):
+				var key:String=original.resource_name
+				if not building_materials.has(key):
+					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/timber.gdshader");material.set_shader_parameter("timber_color",original.albedo_color);material.set_shader_parameter("floorboards",key.contains("Floor"));building_materials[key]=material
+				node.set_surface_override_material(i,building_materials[key])
+
+func cabin(at:Vector3,id:String,_color:String,title:String)->void:
+	var root:Node3D=load("res://assets/architecture/cabin.glb").instantiate();root.name="Cabin_"+id;root.position=at+Vector3(0,.24,0);add_child(root);apply_building_materials(root);buildings[id]=root
+	var nodes:Array[Node3D]=[]
+	for key in ["Roof","CutawayFront","CutawayRight"]:
+		var child:Node3D=root.find_child(key,true,false)
+		if child:nodes.append(child)
+	cutaways.append({"at":at,"nodes":nodes})
+	invisible_wall(at+Vector3(0,.20,0),Vector3(8.2,.08,8.2))
+	invisible_wall(at+Vector3(-4,1.8,0),Vector3(.25,3.4,8))
+	invisible_wall(at+Vector3(4,1.8,0),Vector3(.25,3.4,8))
+	invisible_wall(at+Vector3(0,1.8,-4),Vector3(8,3.4,.25))
+	for x in [-2.65,2.65]:invisible_wall(at+Vector3(x,1.8,4),Vector3(2.7,3.4,.25))
+	invisible_wall(at+Vector3(0,.20,4.8),Vector3(2.7,.08,1.8))
+	# A shallow continuous entrance ramp follows the model's porch, avoiding a capsule-catching step.
+	var ramp:=StaticBody3D.new();var collider:=CollisionShape3D.new();var shape:=ConvexPolygonShape3D.new()
+	var ramp_points:=PackedVector3Array()
+	for x in [-1.35,1.35]:
+		for p in [Vector2(5.65,.24),Vector2(6.8,0),Vector2(5.65,-.1),Vector2(6.8,-.1)]:ramp_points.append(at+Vector3(x,p.y,p.x))
+	shape.points=ramp_points;collider.shape=shape;ramp.add_child(collider);add_child(ramp)
+	var ramp_mesh:=SurfaceTool.new();ramp_mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for p in [Vector3(-1.35,.24,5.65),Vector3(1.35,.24,5.65),Vector3(-1.35,0,6.8),Vector3(1.35,.24,5.65),Vector3(1.35,0,6.8),Vector3(-1.35,0,6.8)]:ramp_mesh.add_vertex(at+p)
+	ramp_mesh.generate_normals();var visible_ramp:=MeshInstance3D.new();visible_ramp.mesh=ramp_mesh.commit();visible_ramp.material_override=mat("584f40");add_child(visible_ramp)
+	for obstruction in [[Vector3(-2.4,.49,-2.22),Vector3(1.50,.50,2.2)],[Vector3(2.6,.79,-2),Vector3(.78,1.10,.78)],[Vector3(1.22,.64,1.44),Vector3(1.45,.8,1.35)]]:invisible_wall(at+obstruction[0],obstruction[1])
+	var flame:MeshInstance3D=root.find_child("FireWindow",true,false);flame.visible=false;fire_meshes[id]=flame
+	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.5,-1.3);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
+	var lamp:=OmniLight3D.new();lamp.position=Vector3(.5,2.2,1.8);lamp.light_color=Color("dfb783");lamp.light_energy=.8;lamp.omni_range=7;root.add_child(lamp)
+	add_point(id,"fire",at+Vector3(2.6,1.0,-1.35),"铸铁炉 · 添柴")
+	var sign:=sign_text(title,Vector3(0,2.94,4.29),19,root);nodes.append(sign)
+
+func make_tent(at:Vector3,id:String,parent:Node3D)->void:
+	var root:Node3D=load("res://assets/architecture/camp.glb").instantiate();root.name="CanvasCamp_"+id;root.position=at;parent.add_child(root);apply_building_materials(root)
+	var roof:Node3D=root.find_child("CampRoof",true,false);camp_roofs[id]=roof;camp_positions[id]=at
+	var flame:MeshInstance3D=root.find_child("FireBed",true,false);flame.visible=false;fire_meshes[id]=flame
+	var light:=OmniLight3D.new();light.position=Vector3(1.1,1,2.65);light.light_color=Color("ffc080");light.omni_range=7;root.add_child(light);fire_lights[id]=light
+	add_point(id,"fire",at+Vector3(1.1,.6,2.2),"营火 · 添柴煮水")
+	for x in [-2.1,2.1]:
+		var wall:=StaticBody3D.new();var collision:=CollisionShape3D.new();var shape:=BoxShape3D.new()
+		shape.size=Vector3(.18,1,1.0);collision.shape=shape;wall.position=Vector3(x,.5,-2.15);wall.add_child(collision);root.add_child(wall)
+	add_flames(id)
+
+func sync_buildings(state)->void:
+	super.sync_buildings(state)
+	for id in buildings:
+		for pair in [["UpgradeBed","bed"],["StorageChest","storage"],["WindowRepairs","insulation"]]:
+			var node:Node3D=buildings[id].find_child(pair[0],true,false)
+			if node:node.visible=id=="home" and bool(state.upgrades[pair[1]])
+
+func stamp_snow(at:Vector3,yaw:float,pressure:float,left:bool)->float:
+	var depth:=snow_depth(at)
+	if depth<.035 or surface_at(at) in ["ice","wood"]:last_sole.erase(left);return 0.0
+	var grade:=slope_at(at)
+	var compression:=clampf(depth*.48*pressure*(1+minf(grade,.6)*.30),.018,.24)
+	if depth>.30 and last_sole.has(left):
+		var previous:Vector2=last_sole[left];var current:=Vector2(at.x,at.z)
+		var distance:=previous.distance_to(current)
+		if distance>.12 and distance<2.6:
+			var middle:=previous.lerp(current,.5)
+			if Terrain.snow(middle.x,middle.y)>.28:
+				track_marks.append({"kind":"drag","at":current,"from":previous,"depth":compression*.55,"age":0.0,"yaw":yaw,"left":left})
+	track_marks.append({"kind":"boot","at":Vector2(at.x,at.z),"yaw":yaw,"depth":compression,"age":0.0,"left":left})
+	last_sole[left]=Vector2(at.x,at.z)
+	while track_marks.size()>240:track_marks.pop_front()
+	track_dirty=true;return compression
+
+func clear_tracks()->void:
+	super.clear_tracks();last_sole.clear()
+
+func paint_tracks()->void:
+	# Base painter handles the individual boot depressions; grooves use a swept boot volume.
+	var all:=track_marks
+	track_marks=all.filter(func(p:Dictionary)->bool:return p.get("kind","boot")=="boot")
+	super.paint_tracks();track_marks=all
+	for stamp in track_marks:
+		if stamp.get("kind","")!="drag":continue
+		var a:Vector2=(stamp.from-patch_center)*32+Vector2(384,384);var b:Vector2=(stamp.at-patch_center)*32+Vector2(384,384)
+		var fade:=1.0-smoothstep(60,240,stamp.age)
+		var delta:=b-a;var length_sq:=maxf(delta.length_squared(),.01)
+		for y in range(maxi(0,int(minf(a.y,b.y))-6),mini(768,int(maxf(a.y,b.y))+7)):
+			for x in range(maxi(0,int(minf(a.x,b.x))-6),mini(768,int(maxf(a.x,b.x))+7)):
+				var p:=Vector2(x,y);var t:=clampf((p-a).dot(delta)/length_sq,0,1)
+				var meander:Vector2=Vector2(-delta.y,delta.x).normalized()*sin(t*TAU)*.45
+				var radius:float=p.distance_to(a+delta*t+meander)/32
+				var core:=1.0-smoothstep(.025,.115,radius);var rim:=smoothstep(.092,.12,radius)*(1-smoothstep(.12,.16,radius))
+				var value:float=(stamp.depth*core*(.5+.5*sin(t*PI))-rim*.008)*fade;var old:=track_image.get_pixel(x,y).r
+				track_image.set_pixel(x,y,Color(maxf(old,value) if value>0 else (minf(old,value) if old<=0 else old),0,0))
+	track_texture.update(track_image)
