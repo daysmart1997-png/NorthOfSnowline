@@ -28,7 +28,7 @@ git lfs pull
 git lfs fsck
 ```
 
-将仓库地址替换为实际地址，SSH 方式需要先在 GitHub 配好 SSH 公钥；也可使用自己的 HTTPS 克隆地址。上述命令需要等 Windows 副本首次推送后再执行。
+当前仓库地址为 https://github.com/daysmart1997-png/NorthOfSnowline.git ，已完成 Windows 首次推送。将示例地址替换为该地址即可克隆；SSH 方式需要先在 GitHub 配好 SSH 公钥，也可以直接使用上述 HTTPS 地址。
 
 在 Godot 项目管理器导入 `project.godot`。第一次打开会重建 `.godot/`，等导入完成再按 F5；关卡由代码生成，编辑器空场景不代表资源缺失。也可以运行：
 
@@ -38,9 +38,9 @@ git lfs fsck
 
 在 Mac 的 Codex 中把**克隆目录本身**添加为项目，首先让它阅读 `AGENTS.md` 和 `docs/PROGRESS.md`。Codex 本地聊天记录不在 Git 中；后续上下文以仓库文档为准。
 
-## 第一次上传 GitHub（用户自行执行）
+## 第一次上传 GitHub（已完成，以下留作操作参考）
 
-本轮只初始化和提交本地仓库，不创建、不配置、不推送远程。用户在 GitHub 建立一个**空仓库**后，在 Windows PowerShell 执行：
+首次整理只初始化并提交本地仓库。随后用户建立了远程空仓库，并授权配置 origin 与首次推送；现已完成，当前副本无需重复添加 origin。首次上传命令如下：
 
 ```powershell
 Set-Location 'D:\GodotProjects\NorthOfSnowline'
