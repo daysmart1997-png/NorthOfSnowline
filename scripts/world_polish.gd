@@ -12,6 +12,7 @@ var track_dirty:=true
 var snowfall:=0.0
 var track_clock:=0.0
 var bark_library:Array[ShaderMaterial]=[]
+var snow_noise:ImageTexture
 
 func _ready()->void:
 	super._ready()
@@ -73,8 +74,15 @@ func build_terrain()->void:
 	snow_surface=ShaderMaterial.new();snow_surface.shader=load("res://assets/shaders/snow_relief.gdshader");snow_surface.set_shader_parameter("height_field",height_texture)
 	track_image=Image.create(768,768,false,Image.FORMAT_RF);track_image.fill(Color(0,0,0));track_texture=ImageTexture.create_from_image(track_image)
 	snow_surface.set_shader_parameter("tracks",track_texture);terrain.material_override=snow_surface;add_child(terrain);terrain.create_trimesh_collision()
+	# Reuse a small smooth value-noise lookup instead of evaluating four sine
+	# hashes per layer for every snow pixel. Repeat period is 128 noise cells.
+	var noise_image:=Image.create(128,128,false,Image.FORMAT_RF)
+	for y in range(128):
+		for x in range(128):noise_image.set_pixel(x,y,Color(fposmod(sin(x*127.1+y*311.7)*43758.5453,1.0),0,0))
+	snow_noise=ImageTexture.create_from_image(noise_image)
+	snow_surface.set_shader_parameter("noise_field",snow_noise)
 	detail_surface=snow_surface.duplicate();detail_surface.set_shader_parameter("local_patch",true)
-	detail_mesh=MeshInstance3D.new();var plane:=PlaneMesh.new();plane.size=Vector2(24,24);plane.subdivide_width=383;plane.subdivide_depth=383;detail_mesh.mesh=plane;detail_mesh.material_override=detail_surface
+	detail_mesh=MeshInstance3D.new();var plane:=PlaneMesh.new();plane.size=Vector2(24,24);plane.subdivide_width=255;plane.subdivide_depth=255;detail_mesh.mesh=plane;detail_mesh.material_override=detail_surface
 	detail_mesh.custom_aabb=AABB(Vector3(-12,-1,-12),Vector3(24,4,24));detail_mesh.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(detail_mesh)
 
@@ -110,18 +118,19 @@ func paint_tracks()->void:
 		if pos.x<0 or pos.y<0 or pos.x>=768 or pos.y>=768:continue
 		var fade:=1.0-smoothstep(60,240,stamp.age)
 		var cs:=cos(stamp.yaw);var sn:=sin(stamp.yaw)
-		for iy in range(-10,11):
-			for ix in range(-10,11):
+		for iy in range(-12,13):
+			for ix in range(-12,13):
 				var x:=int(pos.x)+ix;var y:=int(pos.y)+iy
 				if x<0 or y<0 or x>=768 or y>=768:continue
 				var dx:float=(x-pos.x)/32.0;var dz:float=(y-pos.y)/32.0
 				var u:=dx*cs-dz*sn;var v:=dx*sn+dz*cs
-				var shape:=minf(Vector2(u/.115,(v+.065)/.17).length(),Vector2(u/.087,(v-.13)/.075).length())
+				var spread:float=minf(stamp.depth*.18,.03)
+				var shape:=minf(Vector2(u/(.115+spread),(v+.065)/.17).length(),Vector2(u/(.087+spread),(v-.13)/.075).length())
 				if shape>1.32:continue
 				var core:=1.0-smoothstep(.62,1.0,shape)
 				var rim:=smoothstep(.86,1.06,shape)*(1-smoothstep(1.08,1.32,shape))
 				var tread:=.93+.07*sin(v*110.0)
-				var value:float=(core*stamp.depth*tread-rim*.017)*fade
+				var value:float=(core*stamp.depth*tread-rim*minf(.014,stamp.depth*.25))*fade
 				var old:=track_image.get_pixel(x,y).r
 				track_image.set_pixel(x,y,Color(maxf(old,value) if value>0 else (minf(old,value) if old<=0 else old),0,0))
 	track_texture.update(track_image)

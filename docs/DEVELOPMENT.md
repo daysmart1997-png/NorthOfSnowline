@@ -11,7 +11,17 @@
 | Python | 3.12.14 | 测试脚本、音频制作；运行游戏不需要 |
 | Git / Git LFS | 2.53.0 / 3.7.1 | 源码与大型二进制资产同步 |
 
-Mac 请安装适配该设备芯片的应用。当前没有原生 DLL、Godot C# 或 Windows 专有插件依赖；但 Mac 上的渲染、音频、输入和字体尚待实机验证，不能把 Windows 测试当成 Mac 已兼容。正文配置了 PingFang SC、标题配置了 Songti SC 作为 Mac 字体候选。
+Mac 请安装适配该设备芯片的应用。当前没有原生 DLL、Godot C# 或 Windows 专有插件依赖。2026-09-09 已在 Apple M2 / macOS 26.5.2 / Godot 4.7.2 上通过四组检查并实际运行；中文、角色、小屋和背包画面已检查。声音听感和长时间探索仍待人工试玩。正文配置了 PingFang SC、标题配置了 Songti SC 作为 Mac 字体候选。
+
+### 此次 Mac 工作副本
+
+- 目录：`/Users/leoduan/Documents/ChatGPT/北`，从 `main` 的 `d22ec96` 克隆，保留原仓库历史。
+- Godot：`~/Applications/Godot.app`，命令行入口 `~/.local/bin/godot`。
+- Git LFS 3.8.0：官方 Apple Silicon 二进制安装到 `~/.local/bin/git-lfs`，下载包 SHA-256 与官方 release digest 一致；只执行了仓库本地 `git lfs install --local`。
+- 89 个 LFS 资产已下载，`git lfs fsck` 通过。首次下载使用了此 Mac 已有系统代理 `127.0.0.1:7897` 的单次命令参数，没有写入仓库或全局代理配置。
+- 双击 `启动游戏.command`：自动查找用户 Applications、系统 Applications 或 PATH 中的 Godot，先导入资源再启动。也支持 `GODOT_BIN` 指定引擎；导入日志在 `artifacts/mac-launch-import.log`。
+- 编辑项目：`~/.local/bin/godot --editor --path '/Users/leoduan/Documents/ChatGPT/北'`。
+- 玩家存档不会随 Git 自动迁移；当前 Mac 工作副本不包含 Windows 的旧存档。
 
 Git LFS 必须在克隆前安装；只下载 GitHub 的源码 ZIP 不作为这里的迁移流程。LFS 使用指针管理实际二进制内容，克隆后需要取得对应对象。[Git LFS 官方说明](https://git-lfs.com/)
 
@@ -96,7 +106,7 @@ Mac：
 python3 tools/run_checks.py --godot /Applications/Godot.app/Contents/MacOS/Godot
 ```
 
-也可以设置 `GODOT_BIN` 或把 Godot 加入 PATH。脚本先无界面导入，然后执行规则、集成、细节与地形四组检查；可用 `--suite rules` 等只选一组。它同时检查退出码、成功标记和错误信息，输出保存在不提交的 `artifacts/checks-*.log`。
+也可以设置 `GODOT_BIN` 或把 Godot 加入 PATH。脚本先无界面导入，然后执行室内视野、章节、探索、生存昼夜、雪面/UI、规则、集成、细节与地形九组检查；可用 `--suite rules`、`--suite day_cycle` 等只选一组。它同时检查退出码、成功标记和错误信息，输出保存在不提交的 `artifacts/checks-*.log`。
 
 图形改动还应实际启动游戏检查中文布局、开合背包、行走贴坡、脚印、木屋切顶、声音和帧率。首次 Mac 试玩后将结果写入 `PROGRESS.md`。测试存档与玩家存档分开；玩家存档留在本地，不随 Git 自动同步。
 

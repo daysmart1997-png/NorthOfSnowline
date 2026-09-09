@@ -85,11 +85,14 @@ func _physics_process(delta:float)->void:
 			gait_half=half;last_contact=position;make_contact(half==0)
 
 func make_contact(left:bool)->void:
-	var surface:String=snow_world.surface_at(position)
 	var pressure:float=(1.23 if sprinting else (.72 if crouching else 1.0))*(.88+get_parent().survival.weight()/60.0)
 	var side:="L" if left else "R"
 	var at:Vector3=ground_samples.get(side,{}).get("at",global_position+visual.basis.x*(.13 if left else -.13))
-	snow_world.stamp_snow(at,visual.rotation.y,pressure,left)
+	var surface:String=snow_world.surface_at(at)
+	# Contact on raised props must not stamp the snow underneath the object.
+	if absf(at.y-snow_world.terrain_height(at.x,at.z))<.18:
+		snow_world.stamp_snow(at,visual.rotation.y,pressure,left)
+	else:snow_world.last_sole.erase(left)
 	footfall.emit(surface,pressure,left)
 
 func leave_footprint()->void:
@@ -105,6 +108,7 @@ func sample_ground()->void:
 		ray.exclude=[get_rid()]
 		var hit:=get_world_3d().direct_space_state.intersect_ray(ray)
 		if not hit.is_empty():ground_samples[side]={"height":hit.position.y,"normal":hit.normal,"at":hit.position}
+		else:ground_samples.erase(side)
 
 func clear_footprints()->void:
 	super.clear_footprints()

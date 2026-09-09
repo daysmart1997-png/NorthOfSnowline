@@ -1,5 +1,9 @@
 extends RefCounted
 
+const Chapter = preload("res://scripts/chapter_one.gd")
+
+const DayCycle = preload("res://scripts/day_cycle.gd")
+
 const MAX_WEIGHT := 24.0
 const ITEMS := {
 	"wood": {"name":"木柴", "weight":1.2, "description":"干燥的劈柴。用于添火、搭营地、制作和修缮。"},
@@ -34,6 +38,7 @@ var thirst := 80.0
 var energy := 90.0
 var elapsed := 0.0
 var completed := false
+var chapter:Dictionary = Chapter.fresh()
 var items := {"wood":2,"food":2,"water":1}
 var collected: Array = []
 var discovered: Array = []
@@ -67,11 +72,22 @@ func storm() -> float:
 	var phase := fmod(elapsed, 1200.0)
 	return clampf((phase - 90.0) / 360.0, 0.0, 1.0) * (1.0 - clampf((phase - 850.0) / 300.0, 0.0, 1.0))
 
+func outdoor_temperature() -> float:
+	return -12.0 - 15.0 * storm() - 8.0 * DayCycle.cold(elapsed)
+
 func speed_factor() -> float:
 	return clampf(1.0 - maxf(weight() - 15.0, 0.0) * 0.035, 0.65, 1.0) * (0.82 if temperature < 22 or energy < 15 else 1.0)
 
 func music_effect() -> String:
 	return loaded_tape if music_playing and battery_charge > 0 and count("player") > 0 and count(loaded_tape) > 0 else ""
+
+# Shared by live simulation, rest forecasts and the HUD trend indicator.
+func temperature_rate(shelter:String, windbreak:bool)->float:
+	if not shelter.is_empty():
+		if float(fires.get(shelter,0))>0:return 1.0
+		var loss:=.035+.04*storm()+.035*DayCycle.cold(elapsed)
+		return -loss*(.35 if shelter=="home" and upgrades.insulation else 1.0)
+	return -(.10+.26*storm()+.08*DayCycle.cold(elapsed))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)
 
 func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> void:
 	if health <= 0: return
@@ -82,12 +98,7 @@ func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> vo
 		if battery_charge <= 0: music_playing = false
 	for key in fires: fires[key] = maxf(float(fires[key]) - delta, 0.0)
 	var warm := not shelter.is_empty()
-	var burning := warm and float(fires.get(shelter,0)) > 0
-	if warm:
-		temperature += (1.0 if burning else (0.12 if shelter == "home" and upgrades.insulation else -0.015 * storm())) * delta
-	else:
-		var loss := (0.075 + 0.16 * storm()) * (0.55 if windbreak else 1.0)
-		temperature -= loss * (0.75 if effect == "tape_embers" else 1.0) * delta
+	temperature += temperature_rate(shelter,windbreak) * delta
 	temperature = clampf(temperature,0,100)
 	stamina = clampf(stamina + delta * (-14.0 * (0.75 if effect == "tape_stride" else 1.0) if sprinting else (8.0 if hunger > 15 else 3.0)),0,100)
 	hunger = maxf(0,hunger - delta * (0.05 if sprinting else 0.027))
@@ -122,7 +133,7 @@ func light_fire(id: String) -> String:
 	if float(fires[id]) >= 230: return "炉火充足，先留着木柴。"
 	wood -= 1
 	fires[id] = float(fires[id]) + 120
-	return "添入木柴。炉火增加 120 秒。"
+	return "添入木柴。炉火增加 2 小时。"
 
 func use_item(id: String) -> String:
 	if count(id) <= 0: return "背包里没有这件物品。"
@@ -207,27 +218,61 @@ func discard(id: String) -> String:
 	items[id]=count(id)-1
 	return "已丢弃一份%s。" % ITEMS[id].name
 
-func rest(shelter: String) -> String:
-	if shelter.is_empty(): return "需要在庇护所休息。"
-	if shelter == "home" and not upgrades.bed: return "先修复小屋里的保暖床铺。"
-	if temperature < 30 and float(fires.get(shelter,0)) <= 0: return "太冷了，先把火点起来。"
-	for i in range(120):
+func rest_problem(shelter:String, hours:int=2)->String:
+	if hours not in [1,2,4]:return "请选择 1、2 或 4 小时。"
+	if health<=0:return "无法继续休息。"
+	if shelter.is_empty() or not fires.has(shelter):return "需要在庇护所休息。"
+	if shelter=="home" and not upgrades.bed:return "先修复小屋里的保暖床铺。"
+	if temperature<30 and float(fires.get(shelter,0))<=0:return "太冷了，先把火点起来。"
+	if hunger<=5 or thirst<=5:return "先吃点东西、喝些水，再休息。"
+	return ""
+
+func simulate_rest(shelter:String,hours:int)->Dictionary:
+	var slept:=0
+	var reason:=""
+	for i in range(hours*60):
 		tick(1,shelter,false,false)
-		if health<=0: return "你没能挺过这个寒夜。"
-	energy=minf(100,energy+35)
+		slept+=1
+		if health<=0:reason="没能挺过寒夜";break
+		if temperature<=18:reason="寒冷让你惊醒";break
+		if hunger<=5 or thirst<=5:reason="饥渴让你醒来";break
+	energy=minf(100,energy+18.0*slept/60.0)
 	stamina=100
-	return "休息了两分钟，恢复 35 精力；天气与消耗继续推进。"
+	return {"minutes":slept,"reason":reason}
+
+func rest_preview(shelter:String,hours:int)->Dictionary:
+	var problem:=rest_problem(shelter,hours)
+	if not problem.is_empty():return {"problem":problem}
+	var forecast=get_script().new()
+	forecast.restore(data())
+	var sleep:Dictionary=forecast.simulate_rest(shelter,hours)
+	return {"problem":"","minutes":sleep.minutes,"reason":sleep.reason,"clock":DayCycle.clock_text(forecast.elapsed),"temperature":forecast.temperature,"hunger_cost":hunger-forecast.hunger,"thirst_cost":thirst-forecast.thirst,"energy_gain":forecast.energy-energy,"fire_minutes":maxf(0,float(fires.get(shelter,0))-sleep.minutes),"fire_short":float(fires.get(shelter,0))<hours*60}
+
+func rest(shelter:String,hours:int=2)->String:
+	var problem:=rest_problem(shelter,hours)
+	if not problem.is_empty():return problem
+	var sleep:=simulate_rest(shelter,hours)
+	return "休息 %d 小时 %02d 分钟 · %s%s"%[sleep.minutes/60,sleep.minutes%60,DayCycle.clock_text(elapsed)," · "+sleep.reason if not sleep.reason.is_empty() else " · 已恢复精力"]
 
 func repair() -> bool:
-	if not parts or health<=0 or completed: return false
-	completed=true
+	if not parts or health<=0 or completed or chapter.radio_step>0: return false
+	chapter.radio_step=1
+	Chapter.discover(self,"home_log")
+	Chapter.discover(self,"station_dispatch")
 	return true
 
 func data() -> Dictionary:
-	return {"schema":2,"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
+	return {"schema":3,"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
 
 func restore(d: Dictionary) -> bool:
-	# Validate before assigning. Supports the original v1 save as well as v2.
+	# Validate every chapter field before assigning; legacy saves keep their completed ending.
+	if d.has("chapter"):
+		if not Chapter.valid(d.chapter):return false
+		if (int(d.chapter.radio_step)==4)!=d.get("completed",false):return false
+		if int(d.chapter.radio_step)>0:
+			if not d.get("items") is Dictionary:return false
+			var saved_parts=d.items.get("parts",0)
+			if not (saved_parts is int or saved_parts is float) or not is_finite(float(saved_parts)) or saved_parts<1:return false
 	for key in ["temperature","stamina","health","elapsed"]:
 		if not (d.get(key) is float or d.get(key) is int) or not is_finite(float(d[key])): return false
 	if not d.get("collected") is Array or not d.get("fires") is Dictionary or not d.get("completed") is bool: return false
@@ -262,6 +307,10 @@ func restore(d: Dictionary) -> bool:
 	if not d.get("music_playing",false) is bool: return false
 	for key in ["temperature","stamina","health","hunger","thirst","energy","battery_charge"]: set(key,clampf(float(d.get(key,get(key))),0,100))
 	elapsed=clampf(float(d.elapsed),0,864000)
+	chapter=Chapter.fresh()
+	if d.has("chapter"):chapter=d.chapter.duplicate(true)
+	elif d.completed:
+		chapter.radio_step=4;chapter.reply="report";chapter.report_detail="unknown";chapter.intro_seen=true;chapter.station_seen=true
 	completed=d.completed;items={};collected=d.collected.duplicate()
 	for key in inv:items[key]=int(inv[key])
 	discovered=d.get("discovered",[]).duplicate();structures=d.get("structures",[]).duplicate(true)

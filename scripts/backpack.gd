@@ -1,8 +1,10 @@
 extends PanelContainer
+const Palette=preload("res://scripts/field_theme.gd")
 const Rules=preload("res://scripts/expedition.gd")
 const Icon=preload("res://scripts/item_icon.gd")
 const Slot=preload("res://scripts/inventory_slot.gd")
 const GROUPS={"all":"全部","food":"食水","medical":"医疗","materials":"材料","gear":"装备","tapes":"磁带"}
+const TAB_HINTS={"items":"点击物品查看；将磁带或电池拖到右侧磁带机。","craft":"选择配方制作；数字表示现有材料 / 所需材料。","journal":"探索记录保存在手记中；返回探索后按 Tab 查看路线。"}
 var game
 var content:HBoxContainer
 var status:Label
@@ -12,6 +14,8 @@ var category_bar:HBoxContainer
 var selected:="player"
 var tab:="items"
 var category:="all"
+var journal_focus:=""
+var rest_hours:=2
 var closing:=false
 var roll_tween:Tween
 var tab_buttons:Dictionary={}
@@ -28,16 +32,16 @@ func group_of(id:String)->String:
 
 func setup(main)->void:
 	game=main
-	position=Vector2(80,48);custom_minimum_size=Vector2(1120,624);pivot_offset=Vector2(560,312)
-	var cloth:StyleBoxFlat=game.style(Color("303a3d"),Color("8e9389"));cloth.content_margin_left=28;cloth.content_margin_right=28;cloth.content_margin_top=27;cloth.content_margin_bottom=20
+	position=Vector2(64,40);custom_minimum_size=Vector2(1152,640);pivot_offset=Vector2(576,320)
+	var cloth:StyleBoxFlat=game.style(Palette.PANEL);cloth.content_margin_left=24;cloth.content_margin_right=24;cloth.content_margin_top=24;cloth.content_margin_bottom=24
 	add_theme_stylebox_override("panel",cloth)
 	body=VBoxContainer.new();body.add_theme_constant_override("separation",10);add_child(body)
 	var header:=HBoxContainer.new();body.add_child(header)
-	var title:Label=game.label("行 囊    /    林区野外装备",25,Color("e4ddc9"));title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;header.add_child(title)
-	game.button("收起行囊  [ B ]",func():game.toggle_backpack(),header)
-	status=game.label("",14,Color("bac4c4"));body.add_child(status)
+	var title:Label=game.label("行囊",28,Palette.INK);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;header.add_child(title)
+	game.button("返回探索  [ B / Esc ]",func():game.toggle_backpack(),header)
+	status=game.label("",14,Palette.MUTED);body.add_child(status)
 	weight_bar=ProgressBar.new();weight_bar.custom_minimum_size.y=4;weight_bar.show_percentage=false;weight_bar.max_value=24
-	var bar_bg:=StyleBoxFlat.new();bar_bg.bg_color=Color("222b2f");var bar_fill:=StyleBoxFlat.new();bar_fill.bg_color=Color("b4a176")
+	var bar_bg:=StyleBoxFlat.new();bar_bg.bg_color=Color("222b2f");var bar_fill:=StyleBoxFlat.new();bar_fill.bg_color=Palette.ACCENT
 	weight_bar.add_theme_stylebox_override("background",bar_bg)
 	weight_bar.add_theme_stylebox_override("fill",bar_fill);body.add_child(weight_bar)
 	var tabs:=HBoxContainer.new();body.add_child(tabs)
@@ -51,37 +55,22 @@ func setup(main)->void:
 		category_buttons[id].custom_minimum_size=Vector2(104,34)
 		category_buttons[id].add_theme_font_size_override("font_size",14)
 	content=HBoxContainer.new();content.add_theme_constant_override("separation",22);content.custom_minimum_size=Vector2(1050,325);content.size_flags_vertical=Control.SIZE_EXPAND_FILL;body.add_child(content)
-	feedback=game.label("点击查看；将磁带或电池拖到右侧磁带机。",14,Color("dec89b"));feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;feedback.custom_minimum_size.y=27;body.add_child(feedback)
-	open_sound=AudioStreamPlayer.new();open_sound.volume_db=-20;add_child(open_sound)
+	feedback=game.label("",14,Palette.ACCENT);feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;feedback.custom_minimum_size.y=27;body.add_child(feedback)
+	open_sound=AudioStreamPlayer.new();open_sound.volume_db=-20;open_sound.bus="SnowEffects";add_child(open_sound)
 	visible=false
-
-func _draw()->void:
-	# Seams, narrow leather bindings and canvas grain remain subtle behind readable labels.
-	for y in [11.0,size.y-11]:
-		draw_style_box(binding(),Rect2(8,y-4,size.x-16,8))
-		for x in range(24,int(size.x)-24,12):draw_line(Vector2(x,y+7),Vector2(x+5,y+7),Color(.70,.65,.48,.5),1,true)
-	for x in [12.0,size.x-12]:draw_line(Vector2(x,24),Vector2(x,size.y-24),Color("838879"),2,true)
-	for i in range(65):
-		var y:=22+i*8.7
-		if y<size.y-18:draw_line(Vector2(18,y),Vector2(size.x-18,y),Color(1,1,1,.018),1)
-
-func binding()->StyleBoxFlat:
-	var s:=StyleBoxFlat.new();s.bg_color=Color("242a2c");s.corner_radius_top_left=5;s.corner_radius_top_right=5;s.corner_radius_bottom_left=5;s.corner_radius_bottom_right=5;return s
 
 func open_roll()->void:
 	if roll_tween and roll_tween.is_valid():roll_tween.kill()
 	closing=false;visible=true;refresh();pivot_offset=size/2
-	scale=Vector2(1,.045);body.modulate.a=0;mouse_filter=Control.MOUSE_FILTER_STOP
+	scale=Vector2.ONE;modulate.a=.0;body.modulate.a=1;mouse_filter=Control.MOUSE_FILTER_STOP
 	roll_tween=create_tween();roll_tween.set_parallel(true)
-	roll_tween.tween_property(self,"scale",Vector2.ONE,.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	roll_tween.tween_property(body,"modulate:a",1.0,.17).set_delay(.15)
+	roll_tween.tween_property(self,"modulate:a",1.0,.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	play_rustle(1.0)
 
 func close_roll()->void:
 	if roll_tween and roll_tween.is_valid():roll_tween.kill()
 	closing=true;roll_tween=create_tween()
-	roll_tween.tween_property(body,"modulate:a",0.0,.10)
-	roll_tween.tween_property(self,"scale",Vector2(1,.035),.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	roll_tween.tween_property(self,"modulate:a",0.0,.14)
 	roll_tween.tween_callback(func():visible=false;closing=false;scale=Vector2.ONE;roll_closed.emit())
 	play_rustle(.88)
 
@@ -91,17 +80,18 @@ func play_rustle(pitch:float)->void:
 
 func refresh()->void:
 	for child in content.get_children():content.remove_child(child);child.queue_free()
+	if feedback.text.is_empty() or feedback.text in TAB_HINTS.values():feedback.text=TAB_HINTS[tab]
 	var s=game.survival
-	status.text="负重 %.1f / 24 kg    ·    饱食 %d    水分 %d    精力 %d                           整理行囊时暂停生存"%[s.weight(),s.hunger,s.thirst,s.energy]
+	status.text="健康 %d    体温 %d    体力 %d    ·    负重 %.1f / 24 kg    ·    饱食 %d    水分 %d    精力 %d    ·    第 %d 天 %s / 已暂停"%[s.health,s.temperature,s.stamina,s.weight(),s.hunger,s.thirst,s.energy,Rules.DayCycle.day(s.elapsed),Rules.DayCycle.clock_text(s.elapsed)]
 	weight_bar.value=s.weight();category_bar.visible=tab=="items"
 	for id in tab_buttons:
-		tab_buttons[id].add_theme_stylebox_override("normal",game.style(Color("625b4b") if tab==id else Color("273337"),Color("78827d")))
+		tab_buttons[id].add_theme_stylebox_override("normal",game.style(Palette.RAISED if tab==id else Color.TRANSPARENT,Palette.ACCENT if tab==id else Color.TRANSPARENT))
 	for id in category_buttons:
 		var count:=0
 		for item in Rules.ITEMS:
 			if s.count(item)>0 and (id=="all" or group_of(item)==id):count+=1
 		category_buttons[id].text="%s  %d"%[GROUPS[id],count]
-		category_buttons[id].add_theme_stylebox_override("normal",game.style(Color("71614b") if category==id else Color("303c40"),Color("77817c")))
+		category_buttons[id].add_theme_stylebox_override("normal",game.style(Palette.RAISED if category==id else Color.TRANSPARENT,Palette.LINE if category==id else Color.TRANSPARENT))
 	var scroll:=ScrollContainer.new();scroll.custom_minimum_size=Vector2(592,318);scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;content.add_child(scroll)
 	var left:=VBoxContainer.new();left.size_flags_horizontal=Control.SIZE_EXPAND_FILL;left.add_theme_constant_override("separation",8);scroll.add_child(left)
 	var right:=VBoxContainer.new();right.custom_minimum_size.x=420;right.add_theme_constant_override("separation",10);content.add_child(right)
@@ -114,38 +104,69 @@ func refresh()->void:
 		for id in available:
 			var slot=Slot.new();slot.name="Slot_"+id;slot.item_id=id;slot.quantity=s.count(id);slot.custom_minimum_size=Vector2(184,111)
 			slot.text="\n\n%s   ×%d"%[Rules.ITEMS[id].name,s.count(id)];slot.tooltip_text=Rules.ITEMS[id].description
+			Palette.button_theme(slot)
 			slot.add_theme_font_size_override("font_size",14)
 			for state in ["normal","hover","pressed","focus"]:
-				slot.add_theme_stylebox_override(state,game.style(Color("605b4c") if selected==id or state!="normal" else Color("3b4749"),Color("b4a17a") if selected==id else Color("667775")))
+				slot.add_theme_stylebox_override(state,game.style(Palette.RAISED if selected==id or state!="normal" else Color(1,1,1,.025),Palette.ACCENT if selected==id or state=="focus" else Color.TRANSPARENT))
 			var icon=Icon.new();icon.item_id=id;icon.position=Vector2(57,6);icon.size=Vector2(70,58);icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;slot.add_child(icon)
 			var item:String=id
 			slot.pressed.connect(func():selected=item;refresh());slot.apply_item.connect(func(dragged:String):do_action("use",dragged));grid.add_child(slot)
-		if available.is_empty():left.add_child(game.label("这个口袋还空着。\n继续探索，收集需要的物资。",18,Color("c1c8c3")))
+		if available.is_empty():left.add_child(game.label("这个口袋还空着。\n继续探索，收集需要的物资。",18,Palette.MUTED))
 		if not available.is_empty():item_details(right,s)
 		cassette_dock(right,s)
 	elif tab=="craft":
 		for id in Rules.RECIPES:
 			var recipe:String=id;var cost:Array[String]=[]
 			for item in Rules.RECIPES[id].cost:cost.append("%s %d/%d"%[Rules.ITEMS[item].name,s.count(item),Rules.RECIPES[id].cost[item]])
-			var button=game.button(Rules.RECIPES[id].name+"\n"+" · ".join(cost),func():do_action("craft",recipe),left);button.add_theme_font_size_override("font_size",14)
-		right.add_child(game.label("把这里变成一个家",24,Color("e0cfac")))
-		var description:Label=game.label("封窗保温，让冷风留在屋外。\n修好床铺，为下一次出发养足精神。\n制作储物箱，将备用物资留在家里。\n搭建临时营地，获得遮蔽与营火。\n\n煮水、泡茶需要庇护所内燃烧的火源。",16);description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(description)
-		for id in s.upgrades:right.add_child(game.label(("✓ " if s.upgrades[id] else "○ ")+Rules.RECIPES[id].name,14))
-		game.button("休息两分钟",func():do_action("rest",""),right)
+			var shelter:String=game.world.shelter_at(game.player.position)
+			var valid:bool=not game.world.candidate_camp(game.player.position).is_empty() if id=="camp" else false
+			var problem:String=s.recipe_problem(id,shelter,valid)
+			var button=game.button(Rules.RECIPES[id].name+"\n"+" · ".join(cost)+("\n"+problem if not problem.is_empty() else ""),func():do_action("craft",recipe),left)
+			button.name="Recipe_"+id;button.disabled=not problem.is_empty();button.tooltip_text=problem;button.add_theme_font_size_override("font_size",14)
+		right.add_child(game.label("把这里变成一个家",24,Palette.INK))
+		var description:Label=game.label("封窗减缓失温，炉火才能回暖。\n修好床铺，为下一次出发养足精神。",15);description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(description)
+		build_rest_controls(right,s)
 	else:
-		for poi in game.world.pois:
+		var entries:Array=game.world.pois.filter(func(p):return not game.Chapter.CLUES.has(p.id))
+		for id in game.Chapter.CLUES:
+			var clue:Dictionary=game.Chapter.CLUES[id]
+			entries.append({"id":id,"title":clue.title,"story":clue.text})
+		entries.sort_custom(func(a,b):return a.id==journal_focus and b.id!=journal_focus)
+		for poi in entries:
 			if not s.discovered.has(poi.id):continue
-			left.add_child(game.label(poi.title,20,Color("dcc599")))
+			left.add_child(game.label(poi.title,20,Palette.INK))
 			var entry:Label=game.label(poi.story,15);entry.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;left.add_child(entry)
-		if s.discovered.is_empty():left.add_child(game.label("走出小屋，寻找林区留下的痕迹。",17))
-		right.add_child(game.label("已发现 %d / %d 个地点"%[s.discovered.size(),game.world.pois.size()],20))
-		var hint:Label=game.label("铁轨通往车站，东侧林道可避风。\n西边废弃车辆里也许有意外收获。\n\n找到新的磁带后，在背包里装入试听。",16);hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(hint)
+		if s.discovered.is_empty():left.add_child(game.label("桌上的无线电，仍没能发出你的平安报。",17))
+		right.add_child(game.label("最后一班电波",22))
+		var summary_scroll:=ScrollContainer.new();summary_scroll.custom_minimum_size=Vector2(420,230);summary_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;summary_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;right.add_child(summary_scroll)
+		var hint:Label=game.label(game.Chapter.journal_summary(s),15);hint.size_flags_horizontal=Control.SIZE_EXPAND_FILL;hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;summary_scroll.add_child(hint)
+		if s.parts and not s.completed:game.button("查看交接单 · 调整返程打算",func():game.open_story("station"),right)
+		right.add_child(game.label("已记下 %d 处发现"%s.discovered.size(),14,Palette.MUTED))
 	queue_redraw()
 
+func build_rest_controls(right:VBoxContainer,s)->void:
+	right.add_child(game.label("休息前",18,Palette.INK))
+	var row:=HBoxContainer.new();right.add_child(row)
+	for hours in [1,2,4]:
+		var duration:int=hours
+		var choice=game.button("%d 小时"%hours,func():rest_hours=duration;refresh(),row)
+		choice.custom_minimum_size=Vector2(112,34)
+		choice.add_theme_stylebox_override("normal",game.style(Palette.RAISED if hours==rest_hours else Color.TRANSPARENT,Palette.ACCENT if hours==rest_hours else Palette.LINE))
+	var preview:Dictionary=s.rest_preview(game.world.shelter_at(game.player.position),rest_hours)
+	var text:String=preview.problem
+	if text.is_empty():
+		text="醒来约 %s  ·  精力 +%d\n饱食 −%.1f  /  水分 −%.1f\n预计体温 %d  ·  炉火余 %d 分钟"%[preview.clock,roundi(preview.energy_gain),preview.hunger_cost,preview.thirst_cost,roundi(preview.temperature),floori(preview.fire_minutes)]
+		if not preview.reason.is_empty():text+="\n"+preview.reason+"，可能提前醒来。"
+		elif preview.fire_short:text+="\n炉火撑不到醒来；封窗只能减缓失温。"
+	var forecast:Label=game.label(text,14,Palette.ACCENT if preview.get("fire_short",false) else Palette.MUTED)
+	forecast.name="RestForecast";forecast.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(forecast)
+	var rest_button=game.button("休息 %d 小时"%rest_hours,func():do_action("rest",str(rest_hours)),right)
+	rest_button.disabled=not preview.problem.is_empty()
+
 func item_details(right:VBoxContainer,s)->void:
-	right.add_child(game.label(Rules.ITEMS[selected].name,22,Color("ead9b4")))
+	right.add_child(game.label(Rules.ITEMS[selected].name,22,Palette.INK))
 	var desc:Label=game.label(Rules.ITEMS[selected].description,15);desc.custom_minimum_size.x=414;desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(desc)
-	right.add_child(game.label("%s  ·  随身 %d / 储存 %d  ·  %.2f kg/份"%[GROUPS[group_of(selected)],s.count(selected),int(s.storage.get(selected,0)),Rules.ITEMS[selected].weight],13,Color("c4c9b6")))
+	right.add_child(game.label("%s  ·  随身 %d / 储存 %d  ·  %.2f kg/份"%[GROUPS[group_of(selected)],s.count(selected),int(s.storage.get(selected,0)),Rules.ITEMS[selected].weight],13,Palette.MUTED))
 	var usable:=selected in ["food","water","tea","bandage","battery","player"] or selected.begins_with("tape_")
 	if usable:
 		var use_button=game.button("装入磁带机" if selected.begins_with("tape_") else ("播放 / 停止" if selected=="player" else "使用一份"),func():do_action("use",selected),right);use_button.disabled=s.count(selected)<=0
@@ -160,10 +181,11 @@ func item_details(right:VBoxContainer,s)->void:
 func cassette_dock(right:VBoxContainer,s)->void:
 	if s.count("player")<=0:return
 	var dock=Slot.new();dock.name="MagneticDock";dock.item_id="player";dock.quantity=1;dock.custom_minimum_size=Vector2(410,64)
-	dock.text="◉  奇异磁带机    %d%%\n将磁带 / 电池拖到这里"%s.battery_charge;dock.add_theme_font_size_override("font_size",14)
-	dock.add_theme_stylebox_override("normal",game.style(Color("222d30"),Color("ba9e69")));dock.apply_item.connect(func(id:String):do_action("use",id));dock.pressed.connect(func():do_action("music",""));right.add_child(dock)
+	Palette.button_theme(dock)
+	dock.text="奇异磁带机    %d%%\n将磁带 / 电池拖到这里"%s.battery_charge;dock.add_theme_font_size_override("font_size",14)
+	dock.add_theme_stylebox_override("normal",game.style(Palette.RAISED,Palette.ACCENT));dock.apply_item.connect(func(id:String):do_action("use",id));dock.pressed.connect(func():do_action("music",""));right.add_child(dock)
 	var tape_name:String=Rules.ITEMS[s.loaded_tape].name if Rules.ITEMS.has(s.loaded_tape) else "未装磁带"
-	right.add_child(game.label(("▶ " if s.music_playing else "■ ")+tape_name+"  ·  "+("试听中" if s.music_playing else "已停止"),14,Color("d9bd84")))
+	right.add_child(game.label(("▶ " if s.music_playing else "■ ")+tape_name+"  ·  "+("试听中" if s.music_playing else "已停止"),14,Palette.ACCENT))
 
 func do_action(kind:String,id:String)->void:
 	feedback.text=game.backpack_action(kind,id);refresh()

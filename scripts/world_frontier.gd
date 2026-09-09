@@ -35,6 +35,8 @@ func surface_at(at:Vector3)->String:
 
 func _ready()->void:
 	super._ready()
+	# Tiny flakes should not project dozens of hard rectangular shadows onto snow.
+	snow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var bridge:Node3D=load("res://assets/architecture/bridge.glb").instantiate();bridge.name="TimberTrestleBridge";bridge.position=Vector3(0,0,-86);add_child(bridge);apply_building_materials(bridge)
 	invisible_wall(Vector3(0,.025,-86),Vector3(4.8,.19,18.7))
 	for x in [-2.28,2.28]:invisible_wall(Vector3(x,.68,-86),Vector3(.13,1.3,18.5))
@@ -51,9 +53,11 @@ func _ready()->void:
 		{"id":"hollow","title":"背风洼地","at":Vector3(40,terrain_height(40,-43),-43),"story":"雪在洼地里积得更厚，靴子会拖出两道沟痕。绕到高处更省力。"},
 		{"id":"lake","title":"白桦冻湖","at":Vector3(-28,-1.65,-89),"story":"冰层封住了湖湾。东侧的旧木桥连接两岸，桥脚还能看出林场的铁件与石墩。"}
 	])
-	add_loot("ridge_cache",Vector3(-32,0,-35),"高地巡林员的补给",{"food":2,"cloth":2})
+	add_loot("ridge_cache",Vector3(-32,0,-35),"高地巡林员的补给",{"food":2,"cloth":2,"tea":1})
 	add_loot("hollow_cache",Vector3(38,0,-43),"陷在深雪中的背包",{"herb":2,"wood":2})
 	add_loot("lake_cache",Vector3(-13,0,-72),"湖畔的旧木箱",{"battery":1,"scrap":2})
+
+	var evidence=preload("res://scripts/trail_details.gd").new();add_child(evidence);evidence.build(self)
 
 func build_terrain()->void:
 	super.build_terrain()
@@ -76,6 +80,16 @@ func box(at:Vector3,extent:Vector3,color:String,collision:=false,parent:Node3D=s
 	if (is_equal_approx(at.x,-2.5) and is_equal_approx(at.z,17)) or (is_equal_approx(at.x,-2.3) and is_equal_approx(at.z,16.76)):object.visible=false
 	return object
 
+func add_pickup(id:String,kind:String,at:Vector3,title:String)->void:
+	if id!="radio_parts":super.add_pickup(id,kind,at,title);return
+	# The current imported desk is 24 cm above the legacy floor. Place a compact
+	# module box on its free front edge, clear of the radio and the bed.
+	super.add_pickup(id,kind,Vector3(-2.45,1.19,-170.70),title)
+	var root:Node3D=points.back().node
+	for mesh in root.get_children():
+		if mesh is MeshInstance3D:
+			mesh.scale=Vector3(.68,.5,.5);mesh.position*=Vector3(.68,.5,.5)
+
 func apply_building_materials(root:Node3D)->void:
 	for node in root.find_children("*","MeshInstance3D",true,false):
 		for i in range(node.mesh.get_surface_count()):
@@ -85,8 +99,15 @@ func apply_building_materials(root:Node3D)->void:
 				if not building_materials.has(key):
 					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/timber.gdshader");material.set_shader_parameter("timber_color",original.albedo_color);material.set_shader_parameter("floorboards",key.contains("Floor"));building_materials[key]=material
 				node.set_surface_override_material(i,building_materials[key])
+			elif original is StandardMaterial3D and original.resource_name == "SnowCap":
+				# Runtime material override preserves the authored GLB/Blender assets.
+				if not building_materials.has("SnowCap"):
+					var snow_cap := ShaderMaterial.new()
+					snow_cap.shader = load("res://assets/shaders/roof_snow.gdshader")
+					building_materials["SnowCap"] = snow_cap
+				node.set_surface_override_material(i,building_materials["SnowCap"])
 
-func cabin(at:Vector3,id:String,_color:String,title:String)->void:
+func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 	var root:Node3D=load("res://assets/architecture/cabin.glb").instantiate();root.name="Cabin_"+id;root.position=at+Vector3(0,.24,0);add_child(root);apply_building_materials(root);buildings[id]=root
 	var nodes:Array[Node3D]=[]
 	for key in ["Roof","CutawayFront","CutawayRight"]:
@@ -113,7 +134,7 @@ func cabin(at:Vector3,id:String,_color:String,title:String)->void:
 	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.5,-1.3);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
 	var lamp:=OmniLight3D.new();lamp.position=Vector3(.5,2.2,1.8);lamp.light_color=Color("dfb783");lamp.light_energy=.8;lamp.omni_range=7;root.add_child(lamp)
 	add_point(id,"fire",at+Vector3(2.6,1.0,-1.35),"铸铁炉 · 添柴")
-	var sign:=sign_text(title,Vector3(0,2.94,4.29),19,root);nodes.append(sign)
+	# Identify buildings by silhouette and interior, never a floating nameplate.
 
 func make_tent(at:Vector3,id:String,parent:Node3D)->void:
 	var root:Node3D=load("res://assets/architecture/camp.glb").instantiate();root.name="CanvasCamp_"+id;root.position=at;parent.add_child(root);apply_building_materials(root)
@@ -135,18 +156,20 @@ func sync_buildings(state)->void:
 
 func stamp_snow(at:Vector3,yaw:float,pressure:float,left:bool)->float:
 	var depth:=snow_depth(at)
-	if depth<.035 or surface_at(at) in ["ice","wood"]:last_sole.erase(left);return 0.0
+	if depth<.005 or surface_at(at) in ["ice","wood"]:last_sole.erase(left);return 0.0
 	var grade:=slope_at(at)
-	var compression:=clampf(depth*.48*pressure*(1+minf(grade,.6)*.30),.018,.24)
+	var compression:=minf(depth*.85,clampf(depth*.40*pressure*(1+minf(grade,.6)*.30),.003,.17))
 	if depth>.30 and last_sole.has(left):
 		var previous:Vector2=last_sole[left];var current:=Vector2(at.x,at.z)
 		var distance:=previous.distance_to(current)
 		if distance>.12 and distance<2.6:
 			var middle:=previous.lerp(current,.5)
 			if Terrain.snow(middle.x,middle.y)>.28:
-				track_marks.append({"kind":"drag","at":current,"from":previous,"depth":compression*.55,"age":0.0,"yaw":yaw,"left":left})
+				track_marks.append({"kind":"drag","at":current,"from":previous,"depth":compression*.30,"age":0.0,"yaw":yaw,"left":left})
 	track_marks.append({"kind":"boot","at":Vector2(at.x,at.z),"yaw":yaw,"depth":compression,"age":0.0,"left":left})
-	last_sole[left]=Vector2(at.x,at.z)
+	# A thin path breaks a deep-snow drag trail; do not bridge a cleared crossing.
+	if depth>.30:last_sole[left]=Vector2(at.x,at.z)
+	else:last_sole.erase(left)
 	while track_marks.size()>240:track_marks.pop_front()
 	track_dirty=true;return compression
 

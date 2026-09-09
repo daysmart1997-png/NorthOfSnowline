@@ -1,5 +1,6 @@
 extends SceneTree
 const Rules=preload("res://scripts/expedition.gd")
+const Cycle=preload("res://scripts/day_cycle.gd")
 var failures:=0
 func check(value:bool,label:String)->void:
 	if value:print("PASS: ",label)
@@ -7,6 +8,23 @@ func check(value:bool,label:String)->void:
 func stocked():
 	var s=Rules.new();s.items={"wood":8,"cloth":9,"scrap":5,"herb":2,"water":2,"player":1,"tape_embers":1,"tape_stride":1,"tape_home":1,"battery":1};return s
 func _initialize()->void:
+	check(Cycle.hour(0)==9 and Cycle.day(0)==1,"Journey starts at 09:00 on day one")
+	check(Cycle.hour(900)==0 and Cycle.day(900)==2 and Cycle.clock_text(900)=="00:00","Midnight rolls clock and calendar together")
+	check(Cycle.hour(1440)==9 and Cycle.day(1440)==2,"A full 24-minute day returns to the same hour")
+	check(Cycle.sun_direction(180).distance_to(Cycle.sun_direction(1620))<.00001,"Solar direction wraps continuously between days")
+	check(absf(Cycle.daylight(899.99)-Cycle.daylight(900.01))<.001,"No lighting discontinuity at midnight")
+	for boundary in [540.0,1260.0]:
+		check(absf(Cycle.sun_strength(boundary-.01)-Cycle.sun_strength(boundary+.01))<.001,"Sun fades continuously across the horizon")
+	# Both windows have identical clear weather, isolating the nighttime penalty.
+	var noon=Rules.new();noon.elapsed=0
+	var night=Rules.new();night.elapsed=1200
+	check(night.outdoor_temperature()<noon.outdoor_temperature(),"Night temperature feeds the same survival environment as the HUD")
+	noon.tick(10,"",false,false);night.tick(10,"",false,false)
+	check(night.temperature<noon.temperature,"Night increases outdoor cold loss")
+	var night_fire=Rules.new();night_fire.elapsed=840;night_fire.temperature=40;night_fire.fires.home=120;night_fire.tick(10,"home",false,false)
+	check(night_fire.temperature>40,"An active shelter fire protects and warms at night")
+	var saved_night=Rules.new();saved_night.restore(night.data())
+	check(Cycle.hour(saved_night.elapsed)==Cycle.hour(night.elapsed) and saved_night.storm()==night.storm(),"Saved elapsed restores exact night and weather")
 	var s=Rules.new()
 	s.tick(10,"",false,true)
 	check(s.temperature<88 and s.stamina==0,"Cold and sprint consumption")
@@ -20,7 +38,9 @@ func _initialize()->void:
 	var away=stocked();before=away.items.duplicate();away.craft("bed","")
 	check(away.items==before and not away.upgrades.bed,"Cannot repair home away from home")
 	s.temperature=30;s.tick(10,"home",false,false)
-	check(s.temperature>30,"Insulated home warms without fire")
+	check(s.temperature<30,"Insulation reduces loss without creating heat")
+	var bare=Rules.new();bare.temperature=30;bare.tick(10,"home",false,false)
+	check(s.temperature>bare.temperature,"Insulation retains more warmth than bare walls")
 	s.craft("storage","home");var wood_before:int=s.wood;s.transfer("wood",true,"home")
 	check(s.wood==wood_before-1 and s.storage.wood==1,"Storage deposit")
 	s.transfer("wood",false,"home");check(s.wood==wood_before and s.storage.wood==0,"Storage withdrawal")
@@ -37,6 +57,23 @@ func _initialize()->void:
 	check(s.temperature>40,"Built camp actually warms the player")
 	s=stocked();s.craft("bed","home");s.energy=20;s.light_fire("home");s.rest("home")
 	check(s.energy>50 and s.elapsed==120 and s.thirst<80,"Rest restores energy while advancing consumption")
+	check(Cycle.hour(s.elapsed)==11,"Two-hour rest advances the shared world clock")
+	for hours in [1,2,4]:
+		s=Rules.new();s.upgrades.bed=true;s.energy=15;s.fires.home=120
+		var original:Dictionary=s.data()
+		var forecast:Dictionary=s.rest_preview("home",hours)
+		check(s.data()==original,"Rest forecast never mutates inventory, clock or fire")
+		s.rest("home",hours)
+		check(s.elapsed==hours*60 and is_equal_approx(s.temperature,forecast.temperature) and is_equal_approx(s.energy-15,forecast.energy_gain),"Rest duration and forecast match actual rules")
+		check(forecast.fire_short==(hours>2),"Forecast reports whether fire lasts the requested sleep")
+	s=Rules.new();s.upgrades.bed=true;s.temperature=30;s.elapsed=450
+	var sleep_start:float=s.elapsed
+	s.rest("home",4)
+	check(s.elapsed<sleep_start+240 and s.health==100,"Cold wakes player before lethal hypothermia")
+	s=Rules.new();s.upgrades.bed=true;s.thirst=6;s.rest("home",4)
+	check(s.elapsed<240 and s.thirst<=5 and s.health==100,"Thirst interrupts sleep before starvation damage")
+	s=Rules.new();var invalid_time:float=s.elapsed;s.rest("home",3)
+	check(s.elapsed==invalid_time,"Invalid sleep duration does not advance time")
 	s=Rules.new();s.toggle_music();check(not s.music_playing,"No player means no music power")
 	s=stocked();s.use_item("tape_embers");s.toggle_music()
 	check(s.music_effect()=="tape_embers","Cassette insertion and playback")
@@ -60,7 +97,8 @@ func _initialize()->void:
 	check(restored.restore(legacy.data()) and restored.parts,"Legacy v1 save migration")
 	var bad:Dictionary=s.data();bad.items="bad";check(not Rules.new().restore(bad),"Malformed inventory rejected")
 	bad=s.data();bad.structures=[{"id":"wrong","position":[0,0,0]}];check(not Rules.new().restore(bad),"Malformed camp identity rejected")
-	s=Rules.new();check(not s.repair(),"Radio requires parts");s.parts=true;check(s.repair(),"Radio mission completes")
+	s=Rules.new();check(not s.repair(),"Radio requires parts");s.parts=true;check(s.repair() and not s.completed,"Repair starts the radio exchange")
+	check(Rules.Chapter.advance_radio(s,"call") and Rules.Chapter.advance_radio(s,"report") and Rules.Chapter.advance_radio(s,"confirm") and s.completed,"Radio mission completes after acknowledgment")
 	var old_elapsed:float=s.elapsed;s.tick(1,"home",false,false);check(s.elapsed>old_elapsed,"Free survival continues after radio milestone")
 	s.health=0;old_elapsed=s.elapsed;s.tick(10,"",false,false);check(s.elapsed==old_elapsed,"Death stops survival simulation")
 	print("EXPEDITION_RESULT failures=",failures)

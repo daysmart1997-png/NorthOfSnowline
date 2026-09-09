@@ -11,8 +11,10 @@ static func lake_weight(x:float,z:float)->float:
 
 static func pad_mask(x:float,z:float)->float:
 	var home:=smoothstep(6.4,11.5,Vector2(x,z-18).length())*smoothstep(6.4,11.5,Vector2(x,z+170).length())
-	var road:=smoothstep(4.8,9.0,absf(x))
-	var east:=smoothstep(2.7,6,absf(x-22))
+	# Keep the rail bed level, but break up the ruler-straight snow shoulders.
+	var shoulder:=.7*sin(z*.09)+.35*sin(z*.23+x*.17)
+	var road:=smoothstep(3.2,9.8+shoulder,absf(x))
+	var east:=smoothstep(1.8,6.8,absf(x-22-.65*sin(z*.08)))
 	return home*road*east
 
 static func bedrock(x:float,z:float)->float:
@@ -32,10 +34,15 @@ static func snow(x:float,z:float)->float:
 	if ice>.96:return 0
 	# Accumulation is independent of altitude: hollows collect snow; exposed slopes shed it.
 	var shelter:=.38*mound(x,z,39,-43,17,24)+.30*mound(x,z,-47,-110,19,17)
-	var drifts:=.13+.10*(sin(x*.57+z*.21)*.5+.5)+.07*(sin(z*.87-x*.24)*.5+.5)
+	var warp:=sin(x*.13-z*.11)*1.4+sin(z*.19)*.6
+	var drifts:=.13+.10*(sin(x*.38+z*.21+warp)*.5+.5)+.07*(sin(z*.61-x*.24+warp*.5)*.5+.5)
 	var exposure:=.17*mound(x,z,-34,-36,16,19)+.18*mound(x,z,45,-137,20,25)
 	var thickness:=clampf(drifts+shelter-exposure-slope(x,z)*.21,.035,.65)
-	return thickness*pad_mask(x,z)*(1-ice)
+	# A level approach is packed snow, not bare ground. Preserve a thin printable
+	# layer even where the bedrock mask is zero; cabin/bridge decks are excluded
+	# by the actual contact surface in World.surface_at().
+	var packed:=.045+.010*(sin(x*.43+z*.31)*.5+.5)
+	return lerpf(packed,thickness,pad_mask(x,z))*(1-ice)
 
 static func height(x:float,z:float)->float:
 	return bedrock(x,z)+snow(x,z)

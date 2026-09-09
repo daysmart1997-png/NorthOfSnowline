@@ -1,14 +1,18 @@
 extends Node3D
 
+const DayCycle = preload("res://scripts/day_cycle.gd")
+
 var points: Array[Dictionary] = []
 var env: Environment
 var sun: DirectionalLight3D
+var night_fill: DirectionalLight3D
 var snow: CPUParticles3D
 var fire_lights := {}
 var fire_meshes := {}
 var materials := {}
 var rng := RandomNumberGenerator.new()
 var cutaways: Array[Dictionary] = []
+var lighting_time := -INF
 
 func mat(hex: String) -> StandardMaterial3D:
 	if materials.has(hex):
@@ -91,6 +95,13 @@ func _ready() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 80.0
 	add_child(sun)
+	# A faint, shadowless night fill reveals snow normals without another shadow map.
+	night_fill = DirectionalLight3D.new()
+	night_fill.light_color = Color("8299be")
+	night_fill.light_energy = 0.0
+	night_fill.shadow_enabled = false
+	night_fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	add_child(night_fill)
 	build_terrain()
 	# A snow-covered river stripe and intact crossing; ice hazard is a later milestone.
 	box(Vector3(0, 0.015, -86), Vector3(175, 0.025, 13), "344e6c")
@@ -134,16 +145,7 @@ func _ready() -> void:
 	cabin(Vector3(0, 0, -170), "station", "513f47", "北岭车站 · 维修间")
 	box(Vector3(5.3, 4, -168), Vector3(0.12, 8, 0.12), "656e6d")
 	box(Vector3(6.15, 7.1, -168), Vector3(1.8, 0.7, 0.06), "bd6c4d")
-	# Trails have repeated physical signposts, not only HUD pointers.
-	for z in [-15, -51, -111, -146]:
-		box(Vector3(4.4, 1.1, z), Vector3(0.18, 2.2, 0.18), "5e554b", true)
-		box(Vector3(4.4, 1.95, z), Vector3(2.8, 0.7, 0.16), "545c56")
-		sign_text("↑ 北岭车站", Vector3(4.4, 1.96, z + 0.1), 31)
-	for z in [-25, -60, -100, -135]:
-		box(Vector3(22, 0.014, z), Vector3(4.5, 0.022, 28), "344961")
-		box(Vector3(25, 1.0, z), Vector3(0.15, 2, 0.15), "725b46", true)
-		box(Vector3(25, 1.8, z), Vector3(1.9, 0.6, 0.15), "826647")
-		sign_text("林道 · 避风", Vector3(25, 1.8, z + 0.1), 25)
+	# Hand-placed, terrain-aligned route evidence is added by world_frontier.
 	add_pickup("wood_1", "wood", Vector3(5, 0.45, -30), "散落的木柴")
 	add_pickup("food_1", "food", Vector3(20, 0.45, -55), "遗留的口粮")
 	add_pickup("wood_2", "wood", Vector3(23, 0.45, -112), "干燥的木柴")
@@ -282,7 +284,7 @@ func cabin(at: Vector3, id: String, color: String, title: String) -> void:
 	to_hide.append(box(Vector3(0, 3.55, 0), Vector3(9.1, 0.32, 9.0), "455c79", true, root))
 	to_hide.append(box(Vector3(-2.5, 4.3, -2), Vector3(0.65, 1.6, 0.65), "26364b", true, root))
 	to_hide.append(box(Vector3(0, 2.85, 4.22), Vector3(4.6, 0.6, 0.1), "263649", false, root))
-	to_hide.append(sign_text(title, Vector3(0, 2.85, 4.3), 25, root))
+	# Cabins have no naming signs.
 	for x in [-2.6, 2.6]:
 		to_hide.append(box(Vector3(x, 1.85, 4.18), Vector3(1.05, 1.15, 0.08), "b67d43", false, root))
 		to_hide.append(box(Vector3(x, 1.85, 4.24), Vector3(0.07, 1.15, 0.07), "263549", false, root))
@@ -361,9 +363,33 @@ func build_snow() -> void:
 	snow.material_override = snow_mat
 	add_child(snow)
 
-func weather_update(storm: float, at: Vector3, fires: Dictionary) -> void:
+func update_daylight(elapsed: float, storm: float) -> void:
+	# Updating procedural sky resources at 10 Hz avoids needless redraw work.
+	# Absolute difference also handles backwards jumps when loading an old save.
+	if absf(elapsed - lighting_time) < 0.1: return
+	lighting_time = elapsed
+	var day := DayCycle.daylight(elapsed)
+	var warm := DayCycle.sunset_tint(elapsed) * (1.0 - storm * 0.8)
+	sun.basis = Basis.looking_at(-DayCycle.sun_direction(elapsed), Vector3.UP)
+	sun.light_color = Color("c5cbd4").lerp(Color("efb082"), warm)
+	sun.light_energy = lerpf(0.75, 0.38, storm) * DayCycle.sun_strength(elapsed)
+	sun.shadow_enabled = sun.light_energy > 0.015
+	night_fill.basis = Basis.looking_at(DayCycle.sun_direction(elapsed), Vector3.UP)
+	night_fill.light_energy = 0.16 * DayCycle.sun_strength(elapsed + DayCycle.DAY_SECONDS * 0.5) * (1.0 - storm * 0.45)
+	# Diffuse blue fill keeps silhouettes, trails and snow relief readable at night.
+	env.ambient_light_color = Color("7086ac").lerp(Color("a4b2c7"), day)
+	env.ambient_light_energy = lerpf(0.26, 0.42, day)
+	env.fog_light_color = Color("25344e").lerp(Color("607b9f"), day).lerp(Color("947f82"), warm * 0.3)
+	var sky_mat := env.sky.sky_material as ProceduralSkyMaterial
+	sky_mat.sky_top_color = Color("101b30").lerp(Color("536f87"), day)
+	sky_mat.sky_horizon_color = Color("394761").lerp(Color("c7c9be"), day).lerp(Color("bb8e7d"), warm * 0.6)
+	sky_mat.ground_bottom_color = Color("25344e").lerp(Color("7d919e"), day)
+	sky_mat.ground_horizon_color = sky_mat.sky_horizon_color
+	snow.material_override.albedo_color = Color("7e95b9").lerp(Color("ebf0ec"), day)
+
+func weather_update(storm: float, at: Vector3, fires: Dictionary, elapsed := 0.0) -> void:
+	update_daylight(elapsed, storm)
 	env.fog_density = lerpf(0.0005, 0.010, storm)
-	sun.light_energy = lerpf(0.75, 0.38, storm)
 	snow.global_position = at + Vector3(0, 7, 0)
 	snow.speed_scale = 0.8 + storm * 1.5
 	snow.visible = shelter_at(at).is_empty()

@@ -1,12 +1,12 @@
 extends "res://scripts/world.gd"
 
 var pois: Array[Dictionary] = [
-	{"id":"home","title":"07 号护林小屋","at":Vector3(0,0,18),"story":"窗缝漏着风，床铺已经破损。找些木柴、布料和废金属，让这里重新成为一个家。"},
-	{"id":"wreck","title":"被遗弃的邮递车","at":Vector3(-14,0,-43),"story":"座椅下藏着一台旧磁带机。标签上写着：如果你听见了，就继续向前走。"},
-	{"id":"hunters","title":"猎人的旧营地","at":Vector3(22,0,-62),"story":"帐棚还在，火早已熄了。背包里有布料、药草和一盘名叫《归途》的磁带。"},
+	{"id":"home","title":"护林小屋","at":Vector3(0,0,18),"story":"窗缝漏着风，床铺已经破损。找些木柴、布料和废金属，让这里重新成为一个家。"},
+	{"id":"wreck","title":"被遗弃的邮递车","at":Vector3(-14,0,-43),"story":"邮递车停在雪里，车身的蓝漆已经褪色。旁边的皮包与食品箱还没被搬走；收好能让你继续前行的东西。"},
+	{"id":"hunters","title":"猎人的旧营地","at":Vector3(22,0,-62),"story":"帐棚挡住了风，灰烬早已冷透。旧背包还挂在支架上，旁边留着几根没有烧完的柴。"},
 	{"id":"lookout","title":"林道观测点","at":Vector3(28,0,-115),"story":"风吹过断裂的观测仪。箱子里有电池和《步履》，也许能帮你走得更远。"},
 	{"id":"depot","title":"废弃物资堆场","at":Vector3(-15,0,-128),"story":"几只木箱埋在雪里。生锈的金属和旧布料，如今比钱更有用。"},
-	{"id":"station","title":"北岭维修站","at":Vector3(0,0,-170),"story":"无线电备用零件仍然完好。修复信号之后，可以继续探索林区、加固庇护所，等待救援。"}
+	{"id":"station","title":"北岭维修站","at":Vector3(0,0,-170),"story":"维修间里没有人，床铺与火炉都还在。桌边放着备用模块，旁边压着一张折起的交接单。"}
 ]
 var structure_root:Node3D
 var improvement_root:Node3D
@@ -151,12 +151,12 @@ func sync_buildings(state)->void:
 			box(Vector3(2.4,.4,20.4),Vector3(1.2,.8,.8),"736147",true,improvement_root)
 			box(Vector3(2.4,.83,20.4),Vector3(1.3,.08,.86),"8a7b60",false,improvement_root)
 
-func weather_update(storm:float,at:Vector3,fires:Dictionary)->void:
+func weather_update(storm:float,at:Vector3,fires:Dictionary,elapsed:=0.0)->void:
 	# Ensure legacy saves lacking a camp fire still render safely.
 	var all_fires:=fires.duplicate()
 	for id in fire_lights:
 		if not all_fires.has(id):all_fires[id]=0.0
-	super.weather_update(storm,at,all_fires)
+	super.weather_update(storm,at,all_fires,elapsed)
 	for id in camp_roofs:camp_roofs[id].visible=shelter_at(at)!=id
 	for id in fire_particles:
 		var burning:bool=float(all_fires.get(id,0))>0

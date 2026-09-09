@@ -26,6 +26,8 @@ func _ready()->void:
 		var voice:=AudioStreamPlayer.new();voice.volume_db=-16;add_child(voice);step_voices.append(voice)
 	footstep=step_voices[0]
 	breathing=AudioStreamPlayer.new();breathing.volume_db=-25;add_child(breathing)
+	speaker.bus="SnowMusic";background.bus="SnowMusic"
+	for voice in [wind,fire,breathing]+step_voices:voice.bus="SnowEffects"
 	for surface in ["snow","deep","ice","wood"]:
 		var samples:Array[AudioStream]=[]
 		for i in range(8 if surface in ["snow","deep"] else 4):samples.append(load("res://assets/audio/step_%s_%d.wav"%[surface,i]))

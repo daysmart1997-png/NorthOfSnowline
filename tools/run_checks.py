@@ -8,6 +8,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "interior": (["--fixed-fps", "60", "--quit-after", "1800", "tools/interior_check.tscn", "--", "--isolated-settings"], "INTERIOR_OK"),
+    "chapter": (["--fixed-fps", "60", "--quit-after", "1800", "tools/chapter_check.tscn", "--", "--isolated-settings"], "CHAPTER_OK"),
+    "exploration": (["--fixed-fps", "60", "--quit-after", "1800", "tools/exploration_check.tscn", "--", "--isolated-settings"], "EXPLORATION_OK"),
+    "day_cycle": (["--fixed-fps", "60", "--quit-after", "1800", "--", "--day-cycle-test"], "DAY_CYCLE_OK"),
+    "snow_ui": (["--fixed-fps", "60", "--quit-after", "1800", "--", "--snow-ui-test"], "SNOW_UI_OK"),
     "rules": (["--script", "res://tests/expedition_test.gd"], "EXPEDITION_RESULT failures=0"),
     "integration": (["--fixed-fps", "60", "--quit-after", "1800", "--", "--integration"], "INTEGRATION_OK"),
     "polish": (["--fixed-fps", "60", "--quit-after", "1800", "--", "--polish-test"], "POLISH_OK"),

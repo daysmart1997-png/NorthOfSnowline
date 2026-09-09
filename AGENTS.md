@@ -25,7 +25,7 @@
 - 运行 python tools/check_repository.py 检查暂存文件、凭据模式和 LFS 指针。
 - 涉及玩法、场景、UI 或角色时，运行 python tools/run_checks.py --godot <Godot executable>；按改动进行实际渲染检查。纯文档修改不重复运行全套游戏测试。
 - 检查日志中的成功标记和错误，不能仅凭 Godot 的进程退出码判断断言通过。测试输出只写 artifacts/，不得覆盖玩家 savegame.json。
-- Mac 上尚未完成实际运行验证；不得把 Windows 检查结果报告为 Mac 已通过。记录工具版本、平台、检查内容和剩余问题。
+- Mac 已完成 Godot 4.7.2 的九组检查与实际渲染验证，详见 docs/PROGRESS.md；最新改动仍需在 Windows 复验。不得把一端检查结果报告为另一端已通过，记录工具版本、平台、检查内容和剩余问题。
 
 ## 结束工作
 
