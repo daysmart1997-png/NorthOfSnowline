@@ -81,6 +81,8 @@ func build_terrain()->void:
 		for x in range(128):noise_image.set_pixel(x,y,Color(fposmod(sin(x*127.1+y*311.7)*43758.5453,1.0),0,0))
 	snow_noise=ImageTexture.create_from_image(noise_image)
 	snow_surface.set_shader_parameter("noise_field",snow_noise)
+	snow_surface.set_shader_parameter("powder_normal",load("res://assets/textures/snow004/Snow004_1K-PNG_NormalGL.png"))
+	snow_surface.set_shader_parameter("powder_roughness",load("res://assets/textures/snow004/Snow004_1K-PNG_Roughness.png"))
 	detail_surface=snow_surface.duplicate();detail_surface.set_shader_parameter("local_patch",true)
 	detail_mesh=MeshInstance3D.new();var plane:=PlaneMesh.new();plane.size=Vector2(24,24);plane.subdivide_width=255;plane.subdivide_depth=255;detail_mesh.mesh=plane;detail_mesh.material_override=detail_surface
 	detail_mesh.custom_aabb=AABB(Vector3(-12,-1,-12),Vector3(24,4,24));detail_mesh.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -125,7 +127,7 @@ func paint_tracks()->void:
 				var dx:float=(x-pos.x)/32.0;var dz:float=(y-pos.y)/32.0
 				var u:=dx*cs-dz*sn;var v:=dx*sn+dz*cs
 				var spread:float=minf(stamp.depth*.18,.03)
-				var shape:=minf(Vector2(u/(.115+spread),(v+.065)/.17).length(),Vector2(u/(.087+spread),(v-.13)/.075).length())
+				var shape:=minf(Vector2(u/(.1025+spread),(v+.067)/.151).length(),Vector2(u/(.078+spread),(v-.050)/.060).length())
 				if shape>1.32:continue
 				var core:=1.0-smoothstep(.62,1.0,shape)
 				var rim:=smoothstep(.86,1.06,shape)*(1-smoothstep(1.08,1.32,shape))
@@ -136,19 +138,29 @@ func paint_tracks()->void:
 	track_texture.update(track_image)
 
 func tree(at:Vector3,scale_value:float)->void:
-	var root:=Node3D.new();root.position=at;root.rotation.y=rng.randf_range(0,TAU);add_child(root)
+	var root:=Node3D.new();root.name="WinterTree";root.position=at-Vector3(0,.075,0);root.rotation.y=rng.randf_range(0,TAU);add_child(root)
 	var st:=SurfaceTool.new();st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var caps:=SurfaceTool.new();caps.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var kind:=rng.randi_range(0,2);var h:=rng.randf_range(5.1,7.8)*scale_value*(.84 if kind==2 else 1.0)
-	var lean:=Vector3(rng.randf_range(-.8,.8),0,rng.randf_range(-.65,.65))
+	# Shared wind in world space, with individual growth irregularity.
+	var wind_local:Vector3=root.basis.inverse()*Vector3(-.60,0,.20)
+	var lean:=wind_local+Vector3(rng.randf_range(-.45,.45),0,rng.randf_range(-.32,.32))
 	var trunk:Array[Vector3]=[Vector3.ZERO]
 	for i in range(1,7):
 		var t:=i/6.0
 		trunk.append(Vector3(lean.x*t+sin(t*4.1)*.17,h*t,lean.z*t+sin(t*5.0)*.12))
 	var thickness:=.22 if kind==1 else (.39 if kind==2 else .31)
 	for i in range(6):branch(st,trunk[i],trunk[i+1],lerpf(thickness,.036,i/6.0)*scale_value,lerpf(thickness,.025,(i+1)/6.0)*scale_value)
-	for i in range(4):
-		var a:=i*1.7;branch(st,Vector3(cos(a)*.66,.04,sin(a)*.66),Vector3(0,.55,0),.06,.17)
+	for i in range(5):
+		var a:=i*1.256;branch(st,Vector3(cos(a)*.48,-.015,sin(a)*.48),Vector3(0,.42,0),.028,.14)
+	# Low broken limbs and a flared collar vary the trunk silhouette at eye level.
+	# Deterministic geometry does not consume the placement RNG.
+	branch(st,Vector3(0,-.03,0),trunk[1]*.40,thickness*scale_value*1.16,thickness*scale_value*.85)
+	for i in [1,2]:
+		var side:float=1.0 if (kind+i)%2==0 else -1.0
+		var start:Vector3=trunk[i]
+		var broken:Vector3=start+Vector3(side*(.42+kind*.10),.22,-.16)*scale_value
+		branch(st,start,broken,.10*scale_value,.045*scale_value)
 	var count:=rng.randi_range(8,12)
 	for i in range(count):
 		var t:=.24+i*.052
@@ -157,22 +169,37 @@ func tree(at:Vector3,scale_value:float)->void:
 		var spread:=rng.randf_range(1.25,2.45)*(1.1-t)*scale_value*(1.42 if kind==2 else (.78 if kind==1 else 1.0))
 		var radial:=Vector3(cos(angle),0,sin(angle))
 		var elbow:=begin+radial*spread*.55+Vector3(0,rng.randf_range(.12,.50),0)
-		var end:=begin+radial*spread+Vector3(0,rng.randf_range(.65,1.25),0)
-		branch(st,begin,elbow,.10*scale_value,.065*scale_value);branch(st,elbow,end,.065*scale_value,.025*scale_value)
+		var end:=begin+radial*spread+Vector3(0,rng.randf_range(.65,1.25),0)+wind_local*.18
+		# Consume the same random values even for missing limbs, preserving all
+		# downstream tree/prop placement. Gaps give each crown a readable silhouette.
+		var keep_limb:=i%4!=1
+		if keep_limb:
+			branch(st,begin,elbow,.10*scale_value,.065*scale_value);branch(st,elbow,end,.065*scale_value,.025*scale_value)
 		# Narrow snow sleeves accumulate only along the upward side of thick limbs.
-		branch(caps,begin+Vector3(0,.075,0),elbow+Vector3(0,.053,0),.075*scale_value,.049*scale_value)
+		if keep_limb:branch(caps,begin+Vector3(0,.092,0),elbow+Vector3(0,.070,0),.070*scale_value,.030*scale_value)
 		for j in range(3):
 			var a:=angle+(j-1)*.73+rng.randf_range(-.15,.15)
 			var fork:=end+Vector3(cos(a)*spread*.55,rng.randf_range(.45,1.05),sin(a)*spread*.55)
 			var mid:=end.lerp(fork,.52)+Vector3(.06,0,-.09)
-			branch(st,end,mid,.026,.015);branch(st,mid,fork,.015,.004)
+			if keep_limb and j!=1:
+				branch(st,end,mid,.027,.015);branch(st,mid,fork,.015,.004)
 			for k in [-1,1]:
 				var tip:=mid+Vector3(cos(a+k*.8)*.40,.40+absf(k)*.15,sin(a+k*.8)*.40)
-				branch(st,mid,tip,.011,.0025)
+				if keep_limb and j!=1 and i%3==0 and k==1:branch(st,mid,tip,.011,.0025)
 	var mesh:=MeshInstance3D.new();mesh.mesh=st.commit()
 	var bark:=ShaderMaterial.new();bark.shader=load("res://assets/shaders/bark.gdshader");bark.set_shader_parameter("birch",kind==1);mesh.material_override=bark;root.add_child(mesh)
-	var snow_cap:=MeshInstance3D.new();snow_cap.mesh=caps.commit();snow_cap.material_override=mat("8294ab");root.add_child(snow_cap)
-	invisible_wall(at+Vector3(0,1.8,0),Vector3(.45,3.6,.45))
+	var snow_cap:=MeshInstance3D.new();snow_cap.mesh=caps.commit();snow_cap.material_override=mat("a1b0ba");root.add_child(snow_cap)
+	snow_cap.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Match the lower trunk rings, including species radius, scale and lean.
+	# Convex tapered segments have no capsule end caps protruding past the wood.
+	var body:=StaticBody3D.new();body.name="TrunkCollision";root.add_child(body)
+	for segment in range(3):
+		var shape:=ConvexPolygonShape3D.new();var vertices:=PackedVector3Array()
+		for ring in [segment,segment+1]:
+			var radius:float=lerpf(thickness,.03,ring/6.0)*scale_value
+			for j in range(8):vertices.append(trunk[ring]+Vector3(cos(j*TAU/8)*radius,0,sin(j*TAU/8)*radius))
+		shape.points=vertices
+		var collision:=CollisionShape3D.new();collision.shape=shape;body.add_child(collision)
 
 func branch(st:SurfaceTool,start:Vector3,end:Vector3,r1:float,r2:float)->void:
 	var axis:Vector3=(end-start).normalized();var u:=axis.cross(Vector3.FORWARD).normalized()

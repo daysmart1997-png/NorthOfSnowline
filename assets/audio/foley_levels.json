@@ -1,0 +1,149 @@
+{
+  "description": "Existing PCM sample RMS compensation; +/-4 dB, normalized peak <=0.70 before mixer gain.",
+  "samples": {
+    "step_snow_0": {
+      "rms_db": -26.836,
+      "peak": 0.52001953125,
+      "sha256": "f45e302ffdba6eb14a57618f8a6a499d895743823f3b2dcabf285c64896711bb",
+      "gain_db": -0.961
+    },
+    "step_snow_1": {
+      "rms_db": -23.212,
+      "peak": 0.519989013671875,
+      "sha256": "523dfb8725d09f2484ad721a748d846848551ed7518e2f39048f14e59bbdf922",
+      "gain_db": -4.0
+    },
+    "step_snow_2": {
+      "rms_db": -24.489,
+      "peak": 0.52001953125,
+      "sha256": "8077dc679e883fd0f793f552f8e25ecd00ba2dffdca5094928f3acded523c838",
+      "gain_db": -3.309
+    },
+    "step_snow_3": {
+      "rms_db": -31.972,
+      "peak": 0.52001953125,
+      "sha256": "64e92747639f2c376fcb244e2e36c1af6a7567679356c140270f1017629a0afb",
+      "gain_db": 2.582
+    },
+    "step_snow_4": {
+      "rms_db": -29.489,
+      "peak": 0.519989013671875,
+      "sha256": "1a4cff2d369c02fb870b89783a3814f0f6825bcf3cb5f5b5e80f7bfaf34ba696",
+      "gain_db": 1.692
+    },
+    "step_snow_5": {
+      "rms_db": -24.662,
+      "peak": 0.519989013671875,
+      "sha256": "27f796ba188c4843d516dfbc76c21aa79a17fcb4edbada5c4ca421c76d69b9be",
+      "gain_db": -3.135
+    },
+    "step_snow_6": {
+      "rms_db": -29.766,
+      "peak": 0.52001953125,
+      "sha256": "c11251cf9bd34cff0d2ba545ba57329246992b6ac251f3f3d9ef8c65b25279d2",
+      "gain_db": 1.969
+    },
+    "step_snow_7": {
+      "rms_db": -28.758,
+      "peak": 0.52001953125,
+      "sha256": "c0857c24b0f413356bd15afaf96fea717348ed74a98947b6f51a276c853dd762",
+      "gain_db": 0.961
+    },
+    "step_deep_0": {
+      "rms_db": -27.216,
+      "peak": 0.52001953125,
+      "sha256": "db25ed35df3e26cdc3c0a7f6bdb583557926daf2843f652307c18eb6af092180",
+      "gain_db": -0.457
+    },
+    "step_deep_1": {
+      "rms_db": -22.768,
+      "peak": 0.52001953125,
+      "sha256": "9d5e186300f487cdaf7ef305650261695b52d1814e8f81ffb7382834e9da7e03",
+      "gain_db": -4.0
+    },
+    "step_deep_2": {
+      "rms_db": -24.698,
+      "peak": 0.52001953125,
+      "sha256": "7cf5d7a3b939c54a27304d6c2e878e4cba4ae2d189ed772b0b68e08b62f1a577",
+      "gain_db": -2.975
+    },
+    "step_deep_3": {
+      "rms_db": -31.916,
+      "peak": 0.52001953125,
+      "sha256": "d2e2c2f9d1b71387d925ebbcf87b5baa1527f9e2394829c2f3d38fb1a64d506f",
+      "gain_db": 2.582
+    },
+    "step_deep_4": {
+      "rms_db": -28.13,
+      "peak": 0.52001953125,
+      "sha256": "de5ba315b000c5e90a6ea8e115c4be1c0e3b6a50e644b77dd279fcd229f3c000",
+      "gain_db": 0.457
+    },
+    "step_deep_5": {
+      "rms_db": -24.39,
+      "peak": 0.519989013671875,
+      "sha256": "cfc0809694d91f1190dd1c0b1ae852155fdf973046ed62f7e887a6e54f323759",
+      "gain_db": -3.283
+    },
+    "step_deep_6": {
+      "rms_db": -29.951,
+      "peak": 0.52001953125,
+      "sha256": "2347d451b114d37ced3c4c49605991f607a69e0372d8fd4bae7b14487ff2e25d",
+      "gain_db": 2.278
+    },
+    "step_deep_7": {
+      "rms_db": -28.766,
+      "peak": 0.52001953125,
+      "sha256": "97a1656398a2ba2a0aabdbff297e50ea633328ac68d0340a23cd2803d4134780",
+      "gain_db": 1.092
+    },
+    "step_wood_0": {
+      "rms_db": -26.939,
+      "peak": 0.23577880859375,
+      "sha256": "05e3b32d03232b284a7c87bd5f7e5fe062b50cbaf08499be0dcc9d74d44b9a15",
+      "gain_db": 0.026
+    },
+    "step_wood_1": {
+      "rms_db": -26.887,
+      "peak": 0.291656494140625,
+      "sha256": "2445670513193ab4e496268e662d67039e417c5bc4ee76f1451edc84de434c73",
+      "gain_db": -0.026
+    },
+    "step_wood_2": {
+      "rms_db": -27.545,
+      "peak": 0.25811767578125,
+      "sha256": "f5338df8f867629427dc75b94659dd24bed289b9c1c36cc5ae68b159327524c9",
+      "gain_db": 0.632
+    },
+    "step_wood_3": {
+      "rms_db": -25.974,
+      "peak": 0.290496826171875,
+      "sha256": "fb502fd8e226725dbb4d78e610a114167a24bcc698d869d9bbbaa130f59cdcf5",
+      "gain_db": -0.94
+    },
+    "step_ice_0": {
+      "rms_db": -26.547,
+      "peak": 0.45001220703125,
+      "sha256": "2c48568b4a553f8c46cf0ebac18858a72e6c12dd23f1f76afa8b1931bffb927f",
+      "gain_db": -1.426
+    },
+    "step_ice_1": {
+      "rms_db": -33.175,
+      "peak": 0.45001220703125,
+      "sha256": "1fa00ece65bd8db9c501cbf3d26e58003854f6e7b86919da3ae5c92457c73c01",
+      "gain_db": 3.837
+    },
+    "step_ice_2": {
+      "rms_db": -27.218,
+      "peak": 0.45001220703125,
+      "sha256": "d2f7e37cc0a929ee3414113ecf4c99e97a195facba14238f95973df79c5463bc",
+      "gain_db": -0.755
+    },
+    "step_ice_3": {
+      "rms_db": -28.727,
+      "peak": 0.45001220703125,
+      "sha256": "0079783bd5266aabe36682bbf374bc8d8d73b2af62d26f8d461995d3b1871795",
+      "gain_db": 0.755
+    }
+  }
+}

@@ -1,4 +1,5 @@
 extends RefCounted
+const CabinSnow=preload("res://scripts/cabin_snow_site.gd")
 
 static func mound(x:float,z:float,cx:float,cz:float,rx:float,rz:float)->float:
 	return exp(-pow((x-cx)/rx,2)-pow((z-cz)/rz,2))
@@ -42,7 +43,7 @@ static func snow(x:float,z:float)->float:
 	# layer even where the bedrock mask is zero; cabin/bridge decks are excluded
 	# by the actual contact surface in World.surface_at().
 	var packed:=.045+.010*(sin(x*.43+z*.31)*.5+.5)
-	return lerpf(packed,thickness,pad_mask(x,z))*(1-ice)
+	return clampf(lerpf(packed,thickness,pad_mask(x,z))+CabinSnow.accumulation(x,z),.02,.65)*(1-ice)
 
 static func height(x:float,z:float)->float:
 	return bedrock(x,z)+snow(x,z)

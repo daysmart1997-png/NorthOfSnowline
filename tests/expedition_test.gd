@@ -81,7 +81,7 @@ func _initialize()->void:
 	check(s.temperature>normal.temperature and s.battery_charge<65,"Warmth track reduces cold and consumes battery")
 	s.use_item("tape_stride");s.stamina=100;normal.stamina=100;s.tick(2,"",false,true);normal.tick(2,"",false,true)
 	check(s.stamina>normal.stamina,"Stride track reduces sprint cost")
-	s.use_item("tape_home");s.energy=50;s.health=50;s.tick(5,"home",false,false)
+	s.use_item("tape_home");s.energy=50;s.health=50;s.fires.home=30;s.tick(5,"home",false,false)
 	check(s.energy>50 and s.health>50,"Homeward track recovers in shelter")
 	s.battery_charge=.01;s.tick(1,"",false,false);check(not s.music_playing and s.music_effect().is_empty(),"Empty battery stops music and its effect")
 	s.use_item("battery");check(s.battery_charge==100 and s.count("battery")==0,"Battery replacement consumes spare")

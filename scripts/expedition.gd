@@ -1,27 +1,52 @@
 extends RefCounted
 
+const Kit = preload("res://scripts/field_kit.gd")
+var kit = Kit.new()
+
 const Chapter = preload("res://scripts/chapter_one.gd")
 
 const DayCycle = preload("res://scripts/day_cycle.gd")
 
 const MAX_WEIGHT := 24.0
 const ITEMS := {
+ "knife":{"name":"巡林小刀","weight":.25,"description":"切取鹿肉与修补工具。近身自卫，伤害有限。"},
+ "bow":{"name":"旧猎弓","weight":.8,"description":"右键蓄力瞄准，左键放箭。箭矢可回收；按 Q 切换武器。"},
+ "arrow":{"name":"猎箭","weight":.06,"description":"猎弓弹药。射出后可寻找回收。"},
+ "rifle":{"name":"旧猎枪","weight":3.2,"description":"稀缺猎枪。右键瞄准、左键射击，按 R 装填；枪声会惊动附近动物。"},
+ "ammo":{"name":"猎枪弹药","weight":.05,"description":"每次射击消耗一发。装填时不能射击。"},
+ "raw_meat":{"name":"生鹿肉","weight":.5,"description":"每份半千克；有气味，温存后变质。建议在火炉旁烹饪。"},
+ "cooked_meat":{"name":"烤肉","weight":.4,"description":"恢复 38 饱食；需生肉、木柴与炉火制作。"},
+ "hide":{"name":"生皮","weight":.8,"description":"制作加衬衣物的原料，需要在炉边处理。"},
+ "leather":{"name":"处理过的皮革","weight":.5,"description":"用于修补和制作加衬外套。"},
+ "splint":{"name":"支撑夹板","weight":.3,"description":"在人物的身体页处理扭伤，之后休息恢复。"},
+ "medicine":{"name":"密封药包","weight":.1,"description":"在身体页缓解食物不适或呼吸道刺激；不直接恢复健康。"},
+ "wool_cap":{"name":"双层羊毛帽","weight":.3,"description":"保暖 12。使用后收进行装，在人物页换装。"},
+ "wind_coat":{"name":"巡林防风外套","weight":2.1,"description":"保暖 24，挡风 17，较重。人物页可比较换装。"},
+ "dry_gloves":{"name":"厚毛手套","weight":.3,"description":"保暖 9。周岑留在包裹中的备用手套。"},
+ "lined_boots":{"name":"加衬雪靴","weight":1.3,"description":"保暖 15。比旧靴更暖，也略重。"},
+ "hide_coat":{"name":"皮革加衬外套","weight":2.8,"description":"保暖 29，挡风 19。远行要权衡重量。"},
 	"wood": {"name":"木柴", "weight":1.2, "description":"干燥的劈柴。用于添火、搭营地、制作和修缮。"},
 	"food": {"name":"口粮", "weight":0.4, "description":"恢复 32 饱食与 25 体力。"},
 	"water": {"name":"饮用水", "weight":0.7, "description":"恢复 40 水分。在燃烧的火炉旁可以融雪补水。"},
 	"cloth": {"name":"布料", "weight":0.2, "description":"制作绷带、铺床、修补窗户和搭建营地。"},
 	"scrap": {"name":"废金属", "weight":0.6, "description":"用于庇护所结构加固和储物箱。"},
 	"herb": {"name":"干药草", "weight":0.1, "description":"与饮用水一起，在火炉旁煮成暖身茶。"},
-	"bandage": {"name":"绷带", "weight":0.1, "description":"由两份布料制成，恢复 22 健康。"},
+	"bandage": {"name":"绷带", "weight":0.1, "description":"由两份布料制成；在身体页包扎伤口，止血后休息恢复。"},
 	"tea": {"name":"暖身茶", "weight":0.5, "description":"恢复 18 体温与 20 水分。"},
 	"battery": {"name":"备用电池", "weight":0.15, "description":"装入磁带机，将电量补满。"},
 	"player": {"name":"奇异磁带机", "weight":0.7, "description":"这台旧机器让旋律拥有力量。选磁带装入，再按播放。"},
 	"tape_embers": {"name":"磁带 · 余烬", "weight":0.08, "description":"播放期间，室外失温速度降低 25%。消耗磁带机电量。"},
 	"tape_stride": {"name":"磁带 · 步履", "weight":0.08, "description":"播放期间，奔跑体力消耗降低 25%。消耗磁带机电量。"},
-	"tape_home": {"name":"磁带 · 归途", "weight":0.08, "description":"在庇护所播放时缓慢恢复精力与健康。消耗磁带机电量。"},
+	"tape_home": {"name":"磁带 · 归途", "weight":0.08, "description":"周岑寄给七号的出车磁带，标签写着：“给你回程听。”在温暖庇护所播放时缓慢恢复精力与健康，消耗电量。"},
 	"parts": {"name":"无线电零件", "weight":2.0, "description":"带回护林小屋，在无线电旁安装。"}
 }
 const RECIPES := {
+ "cooked_meat":{"name":"烤肉 · 10 分钟","cost":{"raw_meat":1,"wood":1},"output":"cooked_meat","fire":true,"minutes":10},
+ "leather":{"name":"处理皮革 · 30 分钟","cost":{"hide":1,"wood":1},"output":"leather","fire":true,"minutes":30},
+ "splint":{"name":"制作支撑夹板","cost":{"wood":1,"cloth":2},"output":"splint"},
+ "arrow":{"name":"修制猎箭","cost":{"wood":1,"scrap":1},"output":"arrow"},
+ "lined_boots":{"name":"缝制加衬雪靴 · 15 分钟","cost":{"cloth":3,"leather":1},"output":"lined_boots","fire":true,"minutes":15},
+ "hide_coat":{"name":"制作皮革加衬外套 · 30 分钟","cost":{"leather":3,"cloth":3},"output":"hide_coat","fire":true,"minutes":30},
 	"bandage": {"name":"制作绷带", "cost":{"cloth":2}, "output":"bandage"},
 	"tea": {"name":"煮暖身茶", "cost":{"herb":1,"water":1}, "output":"tea", "fire":true},
 	"water": {"name":"融雪煮水", "cost":{"wood":1}, "output":"water", "fire":true},
@@ -33,8 +58,8 @@ const RECIPES := {
 var temperature := 88.0
 var stamina := 100.0
 var health := 100.0
-var hunger := 85.0
-var thirst := 80.0
+var hunger := 35.0
+var thirst := 30.0
 var energy := 90.0
 var elapsed := 0.0
 var completed := false
@@ -63,7 +88,7 @@ func count(id: String) -> int:
 	return int(items.get(id, 0))
 
 func weight() -> float:
-	var total := 5.0
+	var total := kit.weight()
 	for id in items:
 		if ITEMS.has(id): total += count(id) * float(ITEMS[id].weight)
 	return total
@@ -76,7 +101,7 @@ func outdoor_temperature() -> float:
 	return -12.0 - 15.0 * storm() - 8.0 * DayCycle.cold(elapsed)
 
 func speed_factor() -> float:
-	return clampf(1.0 - maxf(weight() - 15.0, 0.0) * 0.035, 0.65, 1.0) * (0.82 if temperature < 22 or energy < 15 else 1.0)
+	return (0.75 if kit.has_condition("sprain") else 1.0) * (0.88 if thirst<20 or hunger<20 else 1.0) * clampf(1.0 - maxf(weight() - 15.0, 0.0) * 0.035, 0.65, 1.0) * (0.82 if temperature < 22 or energy < 15 else 1.0)
 
 func music_effect() -> String:
 	return loaded_tape if music_playing and battery_charge > 0 and count("player") > 0 and count(loaded_tape) > 0 else ""
@@ -87,7 +112,7 @@ func temperature_rate(shelter:String, windbreak:bool)->float:
 		if float(fires.get(shelter,0))>0:return 1.0
 		var loss:=.035+.04*storm()+.035*DayCycle.cold(elapsed)
 		return -loss*(.35 if shelter=="home" and upgrades.insulation else 1.0)
-	return -(.10+.26*storm()+.08*DayCycle.cold(elapsed))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)
+	return -(.10+.26*storm()+.08*DayCycle.cold(elapsed))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)*clampf(1.0+(50.0-kit.warmth())/70.0,.55,1.65)*(1.0-kit.windproof()*.35)
 
 func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> void:
 	if health <= 0: return
@@ -97,16 +122,17 @@ func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> vo
 		battery_charge = maxf(0, battery_charge - delta * 0.13)
 		if battery_charge <= 0: music_playing = false
 	for key in fires: fires[key] = maxf(float(fires[key]) - delta, 0.0)
-	var warm := not shelter.is_empty()
+	var warm := not shelter.is_empty() and float(fires.get(shelter,0))>0
 	temperature += temperature_rate(shelter,windbreak) * delta
 	temperature = clampf(temperature,0,100)
-	stamina = clampf(stamina + delta * (-14.0 * (0.75 if effect == "tape_stride" else 1.0) if sprinting else (8.0 if hunger > 15 else 3.0)),0,100)
+	stamina = clampf(stamina + delta * (-14.0 * (0.75 if effect == "tape_stride" else 1.0) if sprinting else (8.0 if hunger > 35 and thirst > 35 else (5.0 if hunger > 20 and thirst > 20 else 3.0))),0,100)
 	hunger = maxf(0,hunger - delta * (0.05 if sprinting else 0.027))
 	thirst = maxf(0,thirst - delta * (0.065 if sprinting else 0.043))
 	energy = maxf(0,energy - delta * (0.035 if sprinting else 0.012))
 	if effect == "tape_home" and warm:
 		energy = minf(100,energy + delta * 0.10)
 		health = minf(100,health + delta * 0.04)
+	kit.tick(self,delta,shelter)
 	if temperature < 10: health = maxf(0,health - delta * 1.0)
 	if hunger <= 0 or thirst <= 0: health = maxf(0,health - delta * 0.14)
 
@@ -141,7 +167,18 @@ func use_item(id: String) -> String:
 		"food": hunger=minf(100,hunger+32); stamina=minf(100,stamina+25)
 		"water": thirst=minf(100,thirst+40)
 		"tea": temperature=minf(100,temperature+18); thirst=minf(100,thirst+20)
-		"bandage": health=minf(100,health+22)
+		"bandage", "splint", "medicine":
+			for key in kit.conditions:
+				var c:Dictionary=kit.conditions[key]
+				if (id=="bandage" and c.kind=="wound") or (id=="splint" and c.kind=="sprain") or (id=="medicine" and c.kind in ["stomach","cough"]):return kit.treat(self,key)
+			return "没有适用的伤情。打开人物 → 身体查看。"
+		"cooked_meat": hunger=minf(100,hunger+38)
+		"raw_meat":
+			hunger=minf(100,hunger+18);kit.add_condition("stomach","torso",30)
+		"wool_cap", "wind_coat", "dry_gloves", "lined_boots", "hide_coat":
+			var instance:String=kit.acquire(id);kit.wear(instance)
+		"knife", "bow", "rifle":
+			kit.weapon=id;return "已持用%s。Q 切换，右键瞄准、左键使用。"%ITEMS[id].name
 		"battery":
 			if count("player") <= 0: return "先找到磁带机。"
 			if battery_charge > 95: return "电量还很充足，先留着电池。"
@@ -174,6 +211,7 @@ func recipe_problem(id: String, shelter: String, camp_valid := false) -> String:
 		if shelter != "home": return "需要回到护林小屋。"
 		if upgrades[id]: return "已经建好了。"
 	if recipe.get("fire",false) and (shelter.is_empty() or float(fires.get(shelter,0)) <= 0): return "需要靠近燃烧的火炉。"
+	if id=="cooked_meat" and kit.meat_age>1200:return "生肉已经变质，丢弃后寻找新食物。"
 	if id == "camp":
 		if structures.size() >= 3: return "最多搭建三处营地。"
 		if not shelter.is_empty() or not camp_valid: return "附近没有足够平坦、空旷的搭建位置。"
@@ -262,9 +300,10 @@ func repair() -> bool:
 	return true
 
 func data() -> Dictionary:
-	return {"schema":3,"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
+	return {"schema":5,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
 
 func restore(d: Dictionary) -> bool:
+	if d.has("field_kit") and not Kit.valid(d.field_kit):return false
 	# Validate every chapter field before assigning; legacy saves keep their completed ending.
 	if d.has("chapter"):
 		if not Chapter.valid(d.chapter):return false
@@ -305,10 +344,12 @@ func restore(d: Dictionary) -> bool:
 	var tape = d.get("loaded_tape","")
 	if not tape is String or (not tape.is_empty() and not tape in ["tape_embers","tape_stride","tape_home"]): return false
 	if not d.get("music_playing",false) is bool: return false
+	kit=Kit.new()
+	if d.has("field_kit"):kit.restore(d.field_kit)
 	for key in ["temperature","stamina","health","hunger","thirst","energy","battery_charge"]: set(key,clampf(float(d.get(key,get(key))),0,100))
 	elapsed=clampf(float(d.elapsed),0,864000)
 	chapter=Chapter.fresh()
-	if d.has("chapter"):chapter=d.chapter.duplicate(true)
+	if d.has("chapter"):chapter.merge(d.chapter.duplicate(true),true)
 	elif d.completed:
 		chapter.radio_step=4;chapter.reply="report";chapter.report_detail="unknown";chapter.intro_seen=true;chapter.station_seen=true
 	completed=d.completed;items={};collected=d.collected.duplicate()

@@ -14,6 +14,8 @@ const StoryPanel=preload("res://scripts/chapter_panel.gd")
 var story_panel:PanelContainer
 var radio_lamp:MeshInstance3D
 var radio_lit:=false
+var opening
+var field
 var interior_view=preload("res://scripts/interior_view.gd").new()
 const SAVE_PATH := "res://savegame.json"
 var save_path := SAVE_PATH
@@ -58,6 +60,8 @@ var pending_action:Dictionary={}
 var action_clock:=0.0
 var action_duration:=.7
 var action_origin:=Vector3.ZERO
+var objective_seen:=""
+var objective_reveal:=0.0
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://artifacts"))
@@ -78,10 +82,13 @@ func _ready() -> void:
 	build_ui()
 	backpack=Backpack.new();canvas.add_child(backpack);backpack.setup(self)
 	story_panel=StoryPanel.new();canvas.add_child(story_panel);story_panel.setup(self)
+	opening=preload("res://scripts/opening_sequence.gd").new();add_child(opening);opening.setup(self)
 	backpack.roll_closed.connect(func():active=not menu.visible and not story_panel.visible and started and survival.health>0;player.enabled=active)
 	cassette=Cassette.new();add_child(cassette)
 	player.footfall.connect(cassette.play_step)
 	cassette.breath_pulse.connect(player.exhale)
+	field=preload("res://scripts/field_expedition.gd").new();add_child(field);field.setup(self)
+	player.collision_mask=5
 	world.sync_buildings(survival)
 	set_menu(true)
 	var args := OS.get_cmdline_user_args()
@@ -221,6 +228,7 @@ func button(text_value:String,callback:Callable,parent:Control)->Button:
 func hud_label(text_value:String,at:Vector2,extent:Vector2,font_size:=16,color:=Palette.INK)->Label:
 	var result:=label(text_value,font_size,color)
 	result.position=at;result.size=extent
+	result.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	result.add_theme_color_override("font_outline_color",Color(.035,.065,.085,.7))
 	result.add_theme_constant_override("outline_size",2)
 	canvas.add_child(result)
@@ -240,9 +248,9 @@ func build_ui()->void:
 	music_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	prompt=hud_label("",Vector2(320,514),Vector2(640,36),20)
 	prompt.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	toast=hud_label("",Vector2(250,562),Vector2(780,28),16)
+	toast=hud_label("",Vector2(250,562),Vector2(780,28),18)
 	toast.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	help_label=hud_label("WASD 行走   Shift 奔跑   C 蹲行   E 交互   F 口粮",Vector2(365,606),Vector2(700,28),14,Palette.MUTED)
+	help_label=hud_label("",Vector2.ZERO,Vector2.ZERO,14,Palette.MUTED)
 	help_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	map=TrailMap.new();map.position=Vector2(858,112);map.size=Vector2(390,490);map.visible=false;canvas.add_child(map)
 	menu_veil=ColorRect.new();menu_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -250,11 +258,11 @@ func build_ui()->void:
 	menu=panel(Vector2(360,72),Vector2(560,576))
 	menu_box=VBoxContainer.new();menu_box.add_theme_constant_override("separation",12);menu.add_child(menu_box)
 	menu_box.add_child(label("雪线以北",28))
-	menu_box.add_child(label("第一章 · 林区最后一班电波",14,Palette.MUTED))
+	menu_box.add_child(label("第一章 · 失联",14,Palette.MUTED))
 	menu_title=label("风雪将至",20,Palette.ACCENT);menu_box.add_child(menu_title)
 	menu_info=label("",16);menu_info.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	menu_info.custom_minimum_size=Vector2(512,76);menu_box.add_child(menu_info)
-	new_button=button("开始新的旅程",start_new,menu_box)
+	new_button=button("开始新的旅程",func():start_new();opening.begin(),menu_box)
 	resume_button=button("继续探索",func():set_menu(false),menu_box)
 	save_button=button("保存当前进度",save_game,menu_box)
 	load_button=button("读取上次保存",load_game,menu_box)
@@ -263,6 +271,22 @@ func build_ui()->void:
 	var controls:=label("WASD 移动 · Shift 奔跑 · C 蹲行 · E 交互\nB 行囊 · V 制作 · Tab 地图 · M 磁带 · H 隐藏界面",14,Palette.MUTED)
 	menu_box.add_child(controls)
 	build_settings()
+	canvas.resized.connect(layout_exploration_hud)
+	layout_exploration_hud()
+
+func layout_exploration_hud()->void:
+	# Separate notification, interaction and vital-stat lanes, anchored to viewport.
+	var extent:=canvas.size
+	var width:=minf(740,extent.x-64)
+	prompt.position=Vector2((extent.x-width)*.5,extent.y-174);prompt.size=Vector2(width,44)
+	toast.position=Vector2((extent.x-width)*.5,extent.y-236);toast.size=Vector2(width,48)
+	for item in [prompt,toast]:
+		item.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		item.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+		item.add_theme_constant_override("line_spacing",3)
+	music_label.position=Vector2(extent.x-472,extent.y-122);music_label.size=Vector2(440,24)
+	weather_label.position.x=extent.x-448
+	map.position.x=extent.x-422
 
 func build_settings()->void:
 	settings_box=VBoxContainer.new();settings_box.add_theme_constant_override("separation",14);menu.add_child(settings_box);settings_box.visible=false
@@ -274,6 +298,9 @@ func build_settings()->void:
 		var slider:=HSlider.new();slider.name="Setting_"+key;slider.min_value=spec[2];slider.max_value=spec[3];slider.step=.05;slider.value=preferences.get(key);slider.custom_minimum_size=Vector2(440,24);settings_box.add_child(slider)
 		var title:String=spec[1]
 		slider.value_changed.connect(func(value:float):preferences.set(key,value);preferences.apply_audio();caption.text="%s  %d%%"%[title,roundi(value*100)])
+	var compact_toggle:=CheckButton.new();compact_toggle.name="Setting_compact_hud"
+	compact_toggle.text="简洁探索界面（关闭后显示完整信息）";compact_toggle.button_pressed=preferences.compact_hud
+	compact_toggle.toggled.connect(func(value:bool):preferences.compact_hud=value);settings_box.add_child(compact_toggle)
 	button("返回",func():preferences.save_preferences();show_settings(false),settings_box)
 
 func show_settings(show:bool)->void:
@@ -284,7 +311,10 @@ func show_settings(show:bool)->void:
 func start_new() -> void:
 	cancel_action()
 	survival = Survival.new()
-	player.position = Vector3(0, 0.2, 20.5)
+	survival.temperature=68;survival.energy=70
+	survival.kit.owned[survival.kit.equipped.feet].wet=35
+	if field!=null:field.reset()
+	player.position = Vector3(0, world.terrain_height(0,38)+.2, 38)
 	player.velocity = Vector3.ZERO
 	player.pivot.rotation = Vector3(Player.CAMERA_PITCH, Player.CAMERA_YAW, 0)
 	player.clear_footprints()
@@ -295,7 +325,7 @@ func start_new() -> void:
 	world.refresh_pickups([])
 	started = true
 	set_menu(false)
-	notify("发射灯没有亮。靠近桌上无线电按 E，查看值守记录。")
+	notify("连夜赶路让你又冷又渴。前方是七号小屋；B 取用食水、查看人物。")
 
 func set_menu(show_menu: bool) -> void:
 	if show_menu:
@@ -318,13 +348,13 @@ func set_menu(show_menu: bool) -> void:
 		else:new_button.grab_focus()
 	menu_title.text = "暂停 · 风雪正在等待" if started else "风雪将至"
 	if survival.completed and survival.health>0:
-		menu_title.text = "第一章完成 · 平安报"
-		menu_info.text = "谷口已经记下你的位置，约好明晚再次守听。\n先留在林区休整，北坡信标留待下一章。\n林区时间已过：%d 小时 %02d 分钟。" % [int(survival.elapsed) / 60, int(survival.elapsed) % 60]
+		menu_title.text = "求援成功 · 失联"
+		menu_info.text = "谷口已经记下你的位置，约好明晚再次守听。\n旧频道出现微弱信号，可休整后再次查看。\n林区时间已过：%d 小时 %02d 分钟。" % [int(survival.elapsed) / 60, int(survival.elapsed) % 60]
 	elif survival.health <= 0:
 		menu_title.text = "你倒在了风雪里"
 		menu_info.text = "下次可以在车站火炉旁恢复体温，\n或沿东侧避风林道返程。\n读取保存，或重新开始。"
 	else:
-		menu_info.text = "昨夜山崩截断了下山路，你的平安报还没发出。\n桌上值守簿提到北岭维修间的备用模块。\n恢复通信，让谷口知道这里还有人。"
+		menu_info.text = "昨夜山崩截断了下山路，你的平安报还没发出。\n桌上值守簿提到北岭维修间的备用模块。\n恢复通信，询问失联搭档周岑的消息。"
 
 func _unhandled_input(event: InputEvent) -> void:
 	if capture_mode:return
@@ -368,7 +398,7 @@ func _process(delta: float) -> void:
 		survival.tick(delta, shelter, windbreak, player.sprinting)
 		player.move_factor = survival.speed_factor()*world.travel_factor(player.position,player.velocity)
 		# Hysteresis prevents exhausted sprint toggling every frame.
-		player.can_sprint = survival.stamina > (1.0 if player.sprinting else 22.0)
+		player.can_sprint = survival.stamina > (1.0 if player.sprinting else 22.0) and not survival.kit.has_condition("sprain")
 		update_target()
 		advance_action(delta)
 		for poi in world.pois:
@@ -386,6 +416,7 @@ func _process(delta: float) -> void:
 		radio_lit=survival.chapter.radio_step>0
 		radio_lamp.material_override=world.mat("daa36e" if radio_lit else "343e3e")
 	update_hud(shelter, windbreak)
+	if overlay:objective.visible=false;weather_label.visible=false;context_label.visible=false
 	toast_time = maxf(0.0, toast_time - delta)
 	toast.visible = toast_time > 0 and not overlay
 	if capture_mode:
@@ -415,6 +446,9 @@ func cancel_action()->void:
 	if is_instance_valid(player):player.action_time=0
 
 func interact() -> void:
+	if active and field!=null and field.interaction():return
+	if active and target.get("kind")=="parts" and not survival.kit.module_ready:
+		notify(field.start_job("module","module"));return
 	if not active or target.is_empty() or not pending_action.is_empty():return
 	if target.kind in ["workbench","rest"]:
 		backpack.tab="craft";toggle_backpack();return
@@ -441,7 +475,7 @@ func advance_action(delta:float)->void:
 			if not survival.parts:
 				Chapter.discover(survival,"home_log");open_story("intro")
 			else:
-				survival.repair();open_story("radio")
+				survival.repair();open_story("epilogue" if survival.completed else "radio")
 		"parts":
 			notify(survival.pickup(action.id,action.kind))
 			if survival.collected.has(action.id):
@@ -461,12 +495,18 @@ func close_story()->void:
 
 func update_hud(shelter:String,windbreak:bool)->void:
 	status_hud.survival=survival;status_hud.hud_scale=preferences.hud_scale
+	status_hud.compact=preferences.compact_hud;status_hud.show_details=survival.elapsed<18 or map.visible
+	status_hud.update_warnings()
 	status_hud.temperature_trend=survival.temperature_rate(shelter,windbreak) if survival.temperature<100 or survival.temperature_rate(shelter,windbreak)<0 else 0.0
 	status_hud.action_progress=action_clock/action_duration if not pending_action.is_empty() else -1.0
 	status_hud.queue_redraw()
 	var weather:="晴冷" if survival.storm()<.25 else ("风雪增强" if survival.storm()<.7 else "暴雪")
 	weather_label.text="第 %d 天  ·  %s  %s\n%s  /  %d°C  ·  %s"%[DayCycle.day(survival.elapsed),DayCycle.clock_text(survival.elapsed),DayCycle.phase(survival.elapsed),weather,roundi(survival.outdoor_temperature()),world.terrain_name(player.position)]
 	objective.text=Chapter.objective(survival)
+	if objective.text!=objective_seen:objective_seen=objective.text;objective_reveal=9.0
+	if active:objective_reveal=maxf(0,objective_reveal-get_process_delta_time())
+	objective.visible=not preferences.compact_hud or map.visible or survival.elapsed<18 or objective_reveal>0
+	weather_label.visible=not preferences.compact_hud or map.visible or survival.elapsed<18
 	context_label.text=""
 	if not shelter.is_empty():
 		var remaining:=float(survival.fires.get(shelter,0))
@@ -476,14 +516,19 @@ func update_hud(shelter:String,windbreak:bool)->void:
 	elif DayCycle.phase(survival.elapsed)=="暮色":context_label.text="天色渐暗 · 留好返程的木柴与口粮"
 	elif windbreak:context_label.text="林道避风 · 失温减缓"
 	context_label.add_theme_color_override("font_color",Palette.DANGER if survival.temperature<25 else Palette.ACCENT)
+	context_label.position.y=96 if objective.visible else 32
 	music_label.text=("磁带 · "+str(Survival.ITEMS[survival.loaded_tape].name)+"  %d%%"%survival.battery_charge) if not survival.music_effect().is_empty() else ""
 	prompt.text="[ E ]  "+str(target.title) if active and not target.is_empty() else ""
 	if active and target.get("kind")=="radio":
-		prompt.text="[ E ]  "+("回顾 · 平安报" if survival.completed else ("接起听筒 · 继续通话" if survival.chapter.radio_step>0 else ("安装模块 · 恢复通信" if survival.parts else "查看无线电 · 值守记录")))
+		prompt.text="[ E ]  "+(("回顾 · 旧频道记录" if survival.chapter.epilogue_step==3 else "旧频道有微弱信号") if survival.completed else ("接起听筒 · 继续通话" if survival.chapter.radio_step>0 else ("安装模块 · 恢复通信" if survival.parts else "查看无线电 · 值守记录")))
 	if not pending_action.is_empty():prompt.text=("正在查看" if pending_action.kind=="clue" else ("正在添柴" if pending_action.kind=="fire" else "正在操作"))+" · 移动取消"
+	if field!=null and active:
+		var field_context:String=field.context_text()
+		if not field_context.is_empty():prompt.text=field_context
+	prompt.visible=active and not map.visible
 	map.player_position=player.position;map.discoveries=survival.discovered;map.camps=survival.structures
 	if map.visible:map.queue_redraw()
-	help_label.visible=active and survival.elapsed<25 and not map.visible
+	help_label.visible=false
 
 func notify(message: String) -> void:
 	toast.text = message
@@ -524,6 +569,7 @@ func load_game() -> void:
 		menu_info.text = "存档数据无效，未改变当前进度。"
 		return
 	survival = candidate
+	if field!=null:field.reset()
 	backpack.visible=false
 	story_panel.visible=false
 	world.sync_buildings(survival)
@@ -560,6 +606,7 @@ func backpack_action(kind:String,id:String)->String:
 		"rest":result=survival.rest(shelter,int(id) if not id.is_empty() else 2)
 		"craft":
 			var position_array:Array=world.candidate_camp(player.position) if id=="camp" else []
+			if int(Survival.RECIPES.get(id,{}).get("minutes",0))>0:return field.start_job("craft",id)
 			result=survival.craft(id,shelter,position_array)
 			world.sync_buildings(survival)
 	if survival.health<=0:
@@ -667,7 +714,7 @@ func integration_check() -> void:
 	await get_tree().physics_frame
 	update_target()
 	assert(target.get("id") == "radio_parts", "Station parts must be accessible")
-	set_menu(false);interact()
+	survival.kit.module_ready=true;set_menu(false);interact()
 	assert(not survival.parts,"Pickup waits for contact feedback")
 	for i in range(60):await get_tree().process_frame
 	assert(survival.parts and story_panel.visible)
@@ -703,7 +750,7 @@ func integration_check() -> void:
 	await get_tree().physics_frame
 	update_target()
 	assert(target.get("id") == "radio", "Home radio must be accessible")
-	set_menu(false);interact()
+	survival.kit.module_ready=true;set_menu(false);interact()
 	for i in range(60):await get_tree().process_frame
 	assert(story_panel.visible and not survival.completed)
 	story_panel.transmit("call");story_panel.transmit("report");story_panel.transmit("confirm")
@@ -871,6 +918,7 @@ func day_cycle_check()->void:
 	paused_time=survival.elapsed
 	for i in range(24):await get_tree().process_frame
 	assert(survival.elapsed==paused_time,"Open inventory freezes time")
+	player.position=Vector3(0,.24,20.5)
 	survival.upgrades.bed=true;survival.fires.home=240
 	survival.elapsed=890 # 23:50, crossing midnight while resting in the inventory.
 	var before_rest:float=survival.elapsed

@@ -7,7 +7,7 @@ func settle(frames:int=8)->void:
 	for i in range(frames):await get_tree().process_frame
 
 func check_exploration()->void:
-	start_new();await settle()
+	start_new();survival.kit.module_ready=true;await settle()
 	player.position=Vector3(-2.4,.2,-169.8);player.velocity=Vector3.ZERO;await settle();update_target()
 	assert(target.get("id")=="radio_parts")
 	interact();interact()

@@ -2,6 +2,7 @@ extends SkeletonModifier3D
 var player:CharacterBody3D
 var terrain:Node3D
 var corrections:Dictionary={}
+var contact_normals:Dictionary={}
 var adjustments:=0
 
 func _process_modification()->void:
@@ -13,7 +14,6 @@ func _process_modification()->void:
 		var hip:=skel.find_bone("thigh."+side);var knee:=skel.find_bone("shin."+side);var foot:=skel.find_bone("foot."+side)
 		if mini(hip,mini(knee,foot))<0:continue
 		var h:=skel.get_bone_global_pose(hip);var k:=skel.get_bone_global_pose(knee);var f:=skel.get_bone_global_pose(foot)
-		var ankle_world:Vector3=transform*f.origin
 		var sample:Dictionary=player.ground_samples.get(side,{})
 		if sample.is_empty():continue
 		var shift:float=clampf(float(sample.height)-player.global_position.y,-.22,.22)
@@ -29,7 +29,9 @@ func _process_modification()->void:
 		var k_rotation:=Quaternion((f.origin-k.origin).normalized(),(target-joint).normalized())
 		h.basis=Basis(h_rotation)*h.basis;k.basis=Basis(k_rotation)*k.basis;k.origin=joint
 		var ground_normal:Vector3=transform.basis.inverse()*Vector3(sample.normal)
-		var alignment:=Quaternion(Vector3.UP,ground_normal.normalized())
+		var smoothed:Vector3=Vector3(contact_normals.get(side,ground_normal)).slerp(ground_normal,clampf(get_process_delta_time()*12,0,1)).normalized()
+		contact_normals[side]=smoothed
+		var alignment:=Quaternion(Vector3.UP,smoothed)
 		f.basis=Basis(Quaternion.IDENTITY.slerp(alignment,.8))*f.basis;f.origin=target
 		skel.set_bone_global_pose(hip,h);skel.set_bone_global_pose(knee,k);skel.set_bone_global_pose(foot,f)
 		adjustments+=1

@@ -8,7 +8,7 @@ func settle(frames:int=6)->void:
 
 func check_interior()->void:
 	save_path="res://artifacts/interior/check-save.json"
-	start_new();await settle()
+	start_new();player.position=Vector3(0,.24,20.5);survival.kit.module_ready=true;await settle()
 	assert(interior_view.room=="home" and player.camera.cull_mask==74)
 	assert(player.camera.environment==interior_view.indoor_environment and not world.sun.shadow_enabled and (world.sun.light_cull_mask & 2)==0)
 	assert((world.detail_mesh.layers & player.camera.cull_mask)==0,"Outside snow and all its footprints are excluded")
@@ -59,7 +59,7 @@ func check_interior()->void:
 	player.position=Vector3(22,.2,-62);await settle(35)
 	assert(interior_view.room.is_empty() and world.shelter_at(player.position)=="hunters","An open canvas shelter keeps the exterior visible")
 	assert(not interior_view.backdrop_plane.visible)
-	start_new();await settle();assert(interior_view.room=="home" and container.visible)
+	start_new();player.position=Vector3(0,.24,20.5);survival.kit.module_ready=true;await settle();assert(interior_view.room=="home" and container.visible)
 	active=false;player.enabled=false;set_process(false);cassette.shutdown();story_panel.shutdown_audio();backpack.shutdown_ui()
 	await settle();OS.delay_msec(100)
 	print("INTERIOR_OK: softened external backdrop, no footprint texture, disabled outdoor pass, correct cameras, room-only foreground rendering, actor/props, snow/weather exclusion, real door traversal, retained tracks, doorway hysteresis, both rooms, pickups/load/new game, open tent")

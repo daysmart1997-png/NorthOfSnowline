@@ -19,7 +19,7 @@ func _ready()->void:
 	for node in visual.get_children():visual.remove_child(node);node.queue_free()
 	legs.clear();arms.clear()
 	visual.name="RangerVisual"
-	var ranger:Node3D=load("res://assets/characters/ranger_motion.glb").instantiate()
+	var ranger:Node3D=load("res://assets/characters/ranger_equipment.glb").instantiate()
 	visual.add_child(ranger)
 	skeleton=ranger.find_children("*","Skeleton3D",true,false)[0]
 	feet_modifier=preload("res://scripts/grounded_feet.gd").new()
@@ -36,13 +36,11 @@ func _ready()->void:
 			if original is StandardMaterial3D and (original.resource_name.begins_with("Wool") or original.resource_name.begins_with("Canvas")):
 				var fabric:=ShaderMaterial.new();fabric.shader=load("res://assets/shaders/wool.gdshader");fabric.set_shader_parameter("fabric_color",original.albedo_color);node.set_surface_override_material(surface,fabric)
 	breath_cloud=CPUParticles3D.new();breath_cloud.amount=9;breath_cloud.lifetime=.8;breath_cloud.one_shot=true;breath_cloud.explosiveness=.7
+	breath_cloud.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	breath_cloud.direction=Vector3(0,.2,-1);breath_cloud.spread=20;breath_cloud.gravity=Vector3(.12,.16,0)
 	breath_cloud.initial_velocity_min=.15;breath_cloud.initial_velocity_max=.35;breath_cloud.scale_amount_min=.035;breath_cloud.scale_amount_max=.085
 	var puff:=QuadMesh.new();puff.size=Vector2(1,1);breath_cloud.mesh=puff
-	var material:=StandardMaterial3D.new();material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;material.vertex_color_use_as_albedo=true;material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;breath_cloud.material_override=material
-	material.billboard_mode=BaseMaterial3D.BILLBOARD_ENABLED
-	var soft:=GradientTexture2D.new();soft.width=64;soft.height=64;soft.fill=GradientTexture2D.FILL_RADIAL;soft.fill_from=Vector2(.5,.5);soft.fill_to=Vector2(1,.5)
-	var edge:=Gradient.new();edge.colors=PackedColorArray([Color(1,1,1,1),Color(1,1,1,0)]);soft.gradient=edge;material.albedo_texture=soft
+	var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/breath.gdshader");breath_cloud.material_override=material
 	breath_cloud.scale_amount_min=.10;breath_cloud.scale_amount_max=.22
 	var gradient:=Gradient.new();gradient.colors=PackedColorArray([Color(.8,.86,.92,0),Color(.8,.86,.92,.14),Color(.8,.86,.92,0)]);gradient.offsets=PackedFloat32Array([0,.18,1]);breath_cloud.color_ramp=gradient
 	visual.add_child(breath_cloud);breath_cloud.position=Vector3(0,1.65,-.21);breath_cloud.emitting=false
@@ -67,7 +65,8 @@ func _physics_process(delta:float)->void:
 	var speed:=Vector2(velocity.x,velocity.z).length()
 	# The imported crouch already bends knees and hips; do not lower the complete model again.
 	visual.position.y=lerpf(visual.position.y,-snow_world.snow_depth(position)*.09,delta*10)
-	visual.rotation.x=lerpf(visual.rotation.x,0,delta*12)
+	var load_lean:float=deg_to_rad(lerpf(1.0,4.0,clampf(get_parent().survival.weight()/24.0,0,1)))
+	visual.rotation.x=lerpf(visual.rotation.x,-load_lean*clampf(speed/1.65,0,1),delta*8)
 	if action_time>0 and speed<.2:
 		action_time-=delta;animation.speed_scale=1.25;return
 	action_time=0
@@ -75,10 +74,16 @@ func _physics_process(delta:float)->void:
 	if not animation_names.has(clip):return
 	var anim:Animation=animation.get_animation(animation_names[clip]);anim.loop_mode=Animation.LOOP_LINEAR
 	if last_clip!=clip:
-		last_clip=clip;gait_half=-1;animation.play(animation_names[clip],.22)
+		var moving_clips:=["Walk","Run","CrouchWalk"]
+		var keep_phase:bool=last_clip in moving_clips and clip in moving_clips
+		var phase:float=fposmod(animation.current_animation_position/maxf(animation.current_animation_length,.001),1.0) if keep_phase else (.5 if gait_half==0 else 0.0)
+		last_clip=clip;animation.play(animation_names[clip],.18)
+		# Walk/run/crouch share alternating contacts. Retain the current support
+		# foot across transitions instead of restarting every clip on the left.
+		if clip in moving_clips:animation.seek(phase*anim.length,true)
 	var cycle_seconds:=.60 if clip=="Run" else (1.25 if clip=="CrouchWalk" else .80)
 	var base_speed:=3.8 if clip=="Run" else (.85 if clip=="CrouchWalk" else 1.65)
-	animation.speed_scale=1.0 if speed<.12 else anim.length/cycle_seconds*clampf(speed/base_speed,.45,1.3)
+	animation.speed_scale=1.0 if speed<.12 else anim.length/cycle_seconds*clampf(speed/base_speed,.08,1.3)
 	if speed>.2 and is_on_floor():
 		var half:=int(fmod(animation.current_animation_position/maxf(anim.length,.001),1.0)*2)
 		if half!=gait_half and position.distance_to(last_contact)>.18:
@@ -115,4 +120,4 @@ func clear_footprints()->void:
 	if is_instance_valid(snow_world):snow_world.clear_tracks()
 	last_contact=position;gait_half=-1
 	ground_samples.clear()
-	if is_instance_valid(feet_modifier):feet_modifier.corrections.clear()
+	if is_instance_valid(feet_modifier):feet_modifier.corrections.clear();feet_modifier.contact_normals.clear()

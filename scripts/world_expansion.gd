@@ -2,8 +2,8 @@ extends "res://scripts/world.gd"
 
 var pois: Array[Dictionary] = [
 	{"id":"home","title":"护林小屋","at":Vector3(0,0,18),"story":"窗缝漏着风，床铺已经破损。找些木柴、布料和废金属，让这里重新成为一个家。"},
-	{"id":"wreck","title":"被遗弃的邮递车","at":Vector3(-14,0,-43),"story":"邮递车停在雪里，车身的蓝漆已经褪色。旁边的皮包与食品箱还没被搬走；收好能让你继续前行的东西。"},
-	{"id":"hunters","title":"猎人的旧营地","at":Vector3(22,0,-62),"story":"帐棚挡住了风，灰烬早已冷透。旧背包还挂在支架上，旁边留着几根没有烧完的柴。"},
+	{"id":"wreck","title":"被遗弃的邮递车","at":Vector3(-14,0,-43),"story":"邮递车停在雪里，车身的蓝漆已经褪色。旁边留着寄给七号的包裹。便笺上是周岑的字：“归途这面给你。干手套在工具箱左边，杯子等我回去再还。”"},
+	{"id":"hunters","title":"猎人的旧营地","at":Vector3(22,0,-62),"story":"帐棚挡住了风，灰烬早已冷透。石头下压着送药人留下的纸页，旁边留着几根没有烧完的柴。"},
 	{"id":"lookout","title":"林道观测点","at":Vector3(28,0,-115),"story":"风吹过断裂的观测仪。箱子里有电池和《步履》，也许能帮你走得更远。"},
 	{"id":"depot","title":"废弃物资堆场","at":Vector3(-15,0,-128),"story":"几只木箱埋在雪里。生锈的金属和旧布料，如今比钱更有用。"},
 	{"id":"station","title":"北岭维修站","at":Vector3(0,0,-170),"story":"维修间里没有人，床铺与火炉都还在。桌边放着备用模块，旁边压着一张折起的交接单。"}
@@ -24,10 +24,10 @@ func _ready()->void:
 	add_loot("home_supplies",Vector3(5.3,0,23),"门廊里的旧工具箱",{"wood":3,"cloth":5,"scrap":3})
 	add_loot("timber_south",Vector3(-7,0,-3),"倒木 · 收集干柴",{"wood":3})
 	add_loot("cloth_south",Vector3(12,0,-20),"挂在树上的旧行囊",{"cloth":3,"food":1})
-	add_loot("wreck_player",Vector3(-13,0,-41),"邮递车里的皮包",{"player":1,"tape_embers":1,"battery":1})
+	add_loot("wreck_player",Vector3(-12.4,0,-41),"邮递车里的皮包",{"player":1,"tape_embers":1,"battery":1})
 	add_loot("wreck_food",Vector3(-16,0,-44),"旧食品箱",{"food":2,"water":1})
 	add_loot("herbs_1",Vector3(15,0,-42),"雪下的干药草",{"herb":3})
-	add_loot("hunter_pack",Vector3(20,0,-61),"猎人的背包",{"cloth":3,"tape_home":1,"herb":2})
+	add_loot("hunter_pack",Vector3(-12,0,-44),"寄给七号的包裹",{"cloth":3,"tape_home":1,"herb":2})
 	add_loot("hunter_wood",Vector3(25,0,-59),"备用柴堆",{"wood":3})
 	add_loot("river_water",Vector3(8,0,-78),"被遗落的水壶",{"water":2})
 	add_loot("lookout_case",Vector3(28,0,-113),"观测员的金属盒",{"battery":2,"tape_stride":1,"bandage":1})
@@ -40,14 +40,13 @@ func _ready()->void:
 	add_point("station_bed","rest",Vector3(-2.4,.7,-172.2),"维修间床铺 · 休息")
 	make_tent(Vector3(22,terrain_height(22,-62),-62),"hunters",self)
 	# A distinctive delivery van makes the optional cassette discovery legible.
-	var van:=Node3D.new();van.position=Vector3(-14,terrain_height(-14,-43),-43);add_child(van)
-	box(Vector3(0,.65,0),Vector3(1.8,1,3.8),"3a4d58",true,van)
-	box(Vector3(0,1.4,-.65),Vector3(1.75,.65,1.5),"293c4a",true,van)
-	box(Vector3(0,1.8,-.5),Vector3(1.9,.17,1.9),"a0afbd",false,van)
-	box(Vector3(0,1.42,.12),Vector3(1.45,.4,.04),"1d2b3b",false,van)
-	for x in [-.86,.86]:
-		for z in [-1.25,1.2]:
-			var wheel:=MeshInstance3D.new();var cylinder:=CylinderMesh.new();cylinder.top_radius=.35;cylinder.bottom_radius=.35;cylinder.height=.23;cylinder.radial_segments=12;wheel.mesh=cylinder;wheel.rotation.z=PI/2;wheel.position=Vector3(x,.35,z);wheel.material_override=mat("152437");van.add_child(wheel)
+	var van:Node3D=load("res://assets/architecture/delivery_van.glb").instantiate()
+	van.name="PostalVan";van.position=Vector3(-14,terrain_height(-14,-43)-.055,-43);add_child(van)
+	# One hull per body section follows the silhouette without invisible mirrors.
+	for bounds in [[Vector3(0,.91,.70),Vector3(1.86,1.72,2.40)],[Vector3(0,.77,-1.24),Vector3(1.84,.64,1.43)],[Vector3(0,1.42,-.74),Vector3(1.6,.69,1.05)]]:
+		var body:=StaticBody3D.new();var shape:=BoxShape3D.new();shape.size=bounds[1]
+		var collision:=CollisionShape3D.new();collision.shape=shape;collision.position=bounds[0];body.add_child(collision);van.add_child(body)
+
 	for x in [-17,-14,-11]:
 		box(Vector3(x,terrain_height(x,-128)+.35,-128),Vector3(1.5,.7,1.1),"454b4d",true)
 		box(Vector3(x,terrain_height(x,-128)+.74,-128),Vector3(1.6,.08,1.2),"8495a9")

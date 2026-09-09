@@ -4,7 +4,10 @@ const Rules=preload("res://scripts/expedition.gd")
 const Icon=preload("res://scripts/item_icon.gd")
 const Slot=preload("res://scripts/inventory_slot.gd")
 const GROUPS={"all":"全部","food":"食水","medical":"医疗","materials":"材料","gear":"装备","tapes":"磁带"}
-const TAB_HINTS={"items":"点击物品查看；将磁带或电池拖到右侧磁带机。","craft":"选择配方制作；数字表示现有材料 / 所需材料。","journal":"探索记录保存在手记中；返回探索后按 Tab 查看路线。"}
+const TAB_HINTS={"character":"点击部位查看衣着与身体；操作前显示需要的物资与炉火。","items":"点击物品查看；将磁带或电池拖到右侧磁带机。","craft":"选择配方制作；数字表示现有材料 / 所需材料。","journal":"探索记录保存在手记中；返回探索后按 Tab 查看路线。"}
+var character_part:="feet"
+var character_angle:=PI-.3
+var body_view:=false
 var game
 var content:HBoxContainer
 var status:Label
@@ -25,19 +28,19 @@ var open_sound:AudioStreamPlayer
 signal roll_closed
 
 func group_of(id:String)->String:
-	if id in ["food","water","tea"]:return "food"
-	if id in ["herb","bandage"]:return "medical"
-	if id in ["wood","cloth","scrap"]:return "materials"
+	if id in ["food","water","tea","raw_meat","cooked_meat"]:return "food"
+	if id in ["herb","bandage","splint","medicine"]:return "medical"
+	if id in ["wood","cloth","scrap","hide","leather"]:return "materials"
 	return "tapes" if id.begins_with("tape_") else "gear"
 
 func setup(main)->void:
 	game=main
 	position=Vector2(64,40);custom_minimum_size=Vector2(1152,640);pivot_offset=Vector2(576,320)
-	var cloth:StyleBoxFlat=game.style(Palette.PANEL);cloth.content_margin_left=24;cloth.content_margin_right=24;cloth.content_margin_top=24;cloth.content_margin_bottom=24
+	var cloth:StyleBoxTexture=Palette.cloth();cloth.content_margin_left=24;cloth.content_margin_right=24;cloth.content_margin_top=24;cloth.content_margin_bottom=24
 	add_theme_stylebox_override("panel",cloth)
 	body=VBoxContainer.new();body.add_theme_constant_override("separation",10);add_child(body)
 	var header:=HBoxContainer.new();body.add_child(header)
-	var title:Label=game.label("行囊",28,Palette.INK);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;header.add_child(title)
+	var title:Label=game.label("行装 · 雪线以北",28,Palette.INK);title.size_flags_horizontal=Control.SIZE_EXPAND_FILL;header.add_child(title)
 	game.button("返回探索  [ B / Esc ]",func():game.toggle_backpack(),header)
 	status=game.label("",14,Palette.MUTED);body.add_child(status)
 	weight_bar=ProgressBar.new();weight_bar.custom_minimum_size.y=4;weight_bar.show_percentage=false;weight_bar.max_value=24
@@ -45,7 +48,7 @@ func setup(main)->void:
 	weight_bar.add_theme_stylebox_override("background",bar_bg)
 	weight_bar.add_theme_stylebox_override("fill",bar_fill);body.add_child(weight_bar)
 	var tabs:=HBoxContainer.new();body.add_child(tabs)
-	for pair in [["items","随身物品"],["craft","制作与庇护所"],["journal","探索手记"]]:
+	for pair in [["character","人物"],["items","随身物品"],["craft","制作与庇护所"],["journal","探索手记"]]:
 		var id:String=pair[0]
 		tab_buttons[id]=game.button(pair[1],func():tab=id;feedback.text="";refresh(),tabs)
 	category_bar=HBoxContainer.new();category_bar.add_theme_constant_override("separation",6);body.add_child(category_bar)
@@ -83,6 +86,9 @@ func refresh()->void:
 	if feedback.text.is_empty() or feedback.text in TAB_HINTS.values():feedback.text=TAB_HINTS[tab]
 	var s=game.survival
 	status.text="健康 %d    体温 %d    体力 %d    ·    负重 %.1f / 24 kg    ·    饱食 %d    水分 %d    精力 %d    ·    第 %d 天 %s / 已暂停"%[s.health,s.temperature,s.stamina,s.weight(),s.hunger,s.thirst,s.energy,Rules.DayCycle.day(s.elapsed),Rules.DayCycle.clock_text(s.elapsed)]
+	status.text+="\n%s · 室外 %d°C · %s"%[Rules.DayCycle.phase(s.elapsed),roundi(s.outdoor_temperature()),game.world.terrain_name(game.player.position)]
+	if tab=="character":status.text="第 %d 天 %s · 室外 %d°C · 查看时已暂停"%[Rules.DayCycle.day(s.elapsed),Rules.DayCycle.clock_text(s.elapsed),roundi(s.outdoor_temperature())]
+	weight_bar.visible=tab!="character"
 	weight_bar.value=s.weight();category_bar.visible=tab=="items"
 	for id in tab_buttons:
 		tab_buttons[id].add_theme_stylebox_override("normal",game.style(Palette.RAISED if tab==id else Color.TRANSPARENT,Palette.ACCENT if tab==id else Color.TRANSPARENT))
@@ -92,6 +98,8 @@ func refresh()->void:
 			if s.count(item)>0 and (id=="all" or group_of(item)==id):count+=1
 		category_buttons[id].text="%s  %d"%[GROUPS[id],count]
 		category_buttons[id].add_theme_stylebox_override("normal",game.style(Palette.RAISED if category==id else Color.TRANSPARENT,Palette.LINE if category==id else Color.TRANSPARENT))
+	if tab=="character":
+		var sheet=preload("res://scripts/character_sheet.gd").new();content.add_child(sheet);sheet.setup(game,self);return
 	var scroll:=ScrollContainer.new();scroll.custom_minimum_size=Vector2(592,318);scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;content.add_child(scroll)
 	var left:=VBoxContainer.new();left.size_flags_horizontal=Control.SIZE_EXPAND_FILL;left.add_theme_constant_override("separation",8);scroll.add_child(left)
 	var right:=VBoxContainer.new();right.custom_minimum_size.x=420;right.add_theme_constant_override("separation",10);content.add_child(right)
@@ -137,10 +145,11 @@ func refresh()->void:
 			left.add_child(game.label(poi.title,20,Palette.INK))
 			var entry:Label=game.label(poi.story,15);entry.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;left.add_child(entry)
 		if s.discovered.is_empty():left.add_child(game.label("桌上的无线电，仍没能发出你的平安报。",17))
-		right.add_child(game.label("最后一班电波",22))
+		right.add_child(game.label("第一章 · 失联",22))
 		var summary_scroll:=ScrollContainer.new();summary_scroll.custom_minimum_size=Vector2(420,230);summary_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;summary_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;right.add_child(summary_scroll)
 		var hint:Label=game.label(game.Chapter.journal_summary(s),15);hint.size_flags_horizontal=Control.SIZE_EXPAND_FILL;hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;summary_scroll.add_child(hint)
 		if s.parts and not s.completed:game.button("查看交接单 · 调整返程打算",func():game.open_story("station"),right)
+		if s.chapter.intro_seen or s.completed:game.button("重读值守簿 · 回看开场",func():game.open_story("intro"),right)
 		right.add_child(game.label("已记下 %d 处发现"%s.discovered.size(),14,Palette.MUTED))
 	queue_redraw()
 
@@ -167,9 +176,9 @@ func item_details(right:VBoxContainer,s)->void:
 	right.add_child(game.label(Rules.ITEMS[selected].name,22,Palette.INK))
 	var desc:Label=game.label(Rules.ITEMS[selected].description,15);desc.custom_minimum_size.x=414;desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(desc)
 	right.add_child(game.label("%s  ·  随身 %d / 储存 %d  ·  %.2f kg/份"%[GROUPS[group_of(selected)],s.count(selected),int(s.storage.get(selected,0)),Rules.ITEMS[selected].weight],13,Palette.MUTED))
-	var usable:=selected in ["food","water","tea","bandage","battery","player"] or selected.begins_with("tape_")
+	var usable:=selected in ["food","water","tea","bandage","battery","player","medicine","splint","cooked_meat","raw_meat","knife","bow","rifle"] or Rules.Kit.GEAR.has(selected) or selected.begins_with("tape_")
 	if usable:
-		var use_button=game.button("装入磁带机" if selected.begins_with("tape_") else ("播放 / 停止" if selected=="player" else "使用一份"),func():do_action("use",selected),right);use_button.disabled=s.count(selected)<=0
+		var use_button=game.button("装入磁带机" if selected.begins_with("tape_") else ("播放 / 停止" if selected=="player" else ("应急生食 · 会引起食物不适" if selected=="raw_meat" else "使用一份")),func():do_action("use",selected),right);use_button.disabled=s.count(selected)<=0
 	elif selected!="parts":game.button("查看制作配方",func():tab="craft";refresh(),right)
 	if selected not in ["player","parts"] and not selected.begins_with("tape_"):
 		var row:=HBoxContainer.new();right.add_child(row)
@@ -195,3 +204,12 @@ func shutdown_ui()->void:
 	if is_instance_valid(open_sound):open_sound.stop();open_sound.stream=null
 
 func _exit_tree()->void:shutdown_ui()
+
+func _draw()->void:
+	var seam:=Color(.62,.63,.57,.45)
+	for x in range(12,int(size.x)-12,12):
+		draw_line(Vector2(x,10),Vector2(x+5,10),seam,1)
+		draw_line(Vector2(x,size.y-10),Vector2(x+5,size.y-10),seam,1)
+	for y in range(16,int(size.y)-12,12):
+		draw_line(Vector2(10,y),Vector2(10,y+5),seam,1)
+		draw_line(Vector2(size.x-10,y),Vector2(size.x-10,y+5),seam,1)

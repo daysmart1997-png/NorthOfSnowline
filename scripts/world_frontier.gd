@@ -13,6 +13,10 @@ func normal_at(at:Vector3)->Vector3:return Terrain.normal(at.x,at.z)
 func tree(at:Vector3,scale_value:float)->void:
 	if Terrain.lake_weight(at.x,at.z)>.6:return
 	super.tree(at,scale_value)
+	# Consume the original random draws, then keep the vehicle's immediate site clear.
+	if absf(at.x+14)<3.0 and absf(at.z+43)<3.5:
+		var obstruction:Node=get_child(get_child_count()-1)
+		remove_child(obstruction);obstruction.queue_free()
 
 func terrain_name(at:Vector3)->String:
 	if Terrain.lake_weight(at.x,at.z)>.8:return "冻湖 · 冰面"
@@ -39,7 +43,7 @@ func _ready()->void:
 	snow.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var bridge:Node3D=load("res://assets/architecture/bridge.glb").instantiate();bridge.name="TimberTrestleBridge";bridge.position=Vector3(0,0,-86);add_child(bridge);apply_building_materials(bridge)
 	invisible_wall(Vector3(0,.025,-86),Vector3(4.8,.19,18.7))
-	for x in [-2.28,2.28]:invisible_wall(Vector3(x,.68,-86),Vector3(.13,1.3,18.5))
+	for x in [-2.2,2.2]:invisible_wall(Vector3(x,.68,-86),Vector3(.18,1.3,18.5))
 	for side in [-1,1]:
 		var ramp:=StaticBody3D.new();var collision:=CollisionShape3D.new();var shape:=ConvexPolygonShape3D.new();var vertices:=PackedVector3Array()
 		for x in [-2.4,2.4]:
@@ -58,6 +62,28 @@ func _ready()->void:
 	add_loot("lake_cache",Vector3(-13,0,-72),"湖畔的旧木箱",{"battery":1,"scrap":2})
 
 	var evidence=preload("res://scripts/trail_details.gd").new();add_child(evidence);evidence.build(self)
+	# Authored cabin grove uses its own seed; existing loot/world placement stays stable.
+	var saved_rng_state:=rng.state
+	rng.seed=90731
+	for at in Terrain.CabinSnow.TREES:
+		tree(Vector3(at.x,terrain_height(at.x,at.z),at.z),rng.randf_range(.78,1.02))
+	rng.state=saved_rng_state
+	add_cabin_dressing()
+	apply_building_materials(get_node("PostalVan"))
+	var closed_road=preload("res://scripts/south_pass.gd").new();add_child(closed_road);closed_road.build(self)
+
+func add_cabin_dressing()->void:
+	var placements:=[
+		["fallen_timber",Vector3(-6.3,0,28.0),-.24,Vector3(3.4,.38,1.0)],
+		["old_stump",Vector3(5.8,0,29.0),.3,Vector3(.6,.55,.6)],
+		["firewood_stack",Vector3(-4.9,0,19.0),0.0,Vector3(1.5,.75,1.1)]
+	]
+	for placement in placements:
+		var at:Vector3=placement[1];at.y=terrain_height(at.x,at.z)-.07
+		var prop:Node3D=load("res://assets/props/"+placement[0]+".glb").instantiate()
+		prop.name="CabinDressing_"+placement[0];prop.position=at;prop.rotation.y=placement[2];add_child(prop);apply_building_materials(prop)
+		var body:=StaticBody3D.new();var collision:=CollisionShape3D.new();var shape:=BoxShape3D.new()
+		shape.size=placement[3];collision.shape=shape;collision.position.y=shape.size.y*.4;body.add_child(collision);prop.add_child(body)
 
 func build_terrain()->void:
 	super.build_terrain()
@@ -71,7 +97,8 @@ func build_terrain()->void:
 	for material in [snow_surface,detail_surface]:material.set_shader_parameter("biomes",biome_texture)
 
 func box(at:Vector3,extent:Vector3,color:String,collision:=false,parent:Node3D=self)->MeshInstance3D:
-	var object:=super.box(at,extent,color,collision,parent)
+	var replaced:bool=parent.name=="ShelterRepairs" or (is_equal_approx(at.x,-2.7) and is_equal_approx(at.z,20.5)) or (is_equal_approx(at.x,-2.5) and is_equal_approx(at.z,17))
+	var object:=super.box(at,extent,color,collision and not replaced,parent)
 	# Replaced by actual lake terrain, trestle bridge and imported cabin furnishings.
 	if (extent.x>170 and absf(at.z+86)<.1) or (extent.x==5.0 and extent.z==16.0):object.visible=false
 	if is_equal_approx(extent.x,4.5) and is_equal_approx(extent.z,28):object.visible=false
@@ -90,6 +117,22 @@ func add_pickup(id:String,kind:String,at:Vector3,title:String)->void:
 		if mesh is MeshInstance3D:
 			mesh.scale=Vector3(.68,.5,.5);mesh.position*=Vector3(.68,.5,.5)
 
+func add_loot(id:String,at:Vector3,title:String,contents:Dictionary)->void:
+	var root:Node3D=load("res://assets/architecture/supply_crate.glb").instantiate()
+	root.name="Supply_"+id;root.position=Vector3(at.x,maxf(terrain_height(at.x,at.z),at.y),at.z);add_child(root);apply_building_materials(root)
+	var body:=StaticBody3D.new();body.name="SupplyCollision";root.add_child(body)
+	var collision:=CollisionShape3D.new();var shape:=BoxShape3D.new();shape.size=Vector3(.86,.53,.65)
+	collision.shape=shape;collision.position.y=.265;body.add_child(collision)
+	var marker:=sign_text("◇",Vector3(0,.95,0),25,root);marker.billboard=BaseMaterial3D.BILLBOARD_ENABLED;marker.modulate=Color("d3b684")
+	points.append({"id":id,"kind":"loot","position":root.position+Vector3(0,.6,0),"title":title,"node":root,"contents":contents})
+
+func refresh_pickups(collected:Array)->void:
+	super.refresh_pickups(collected)
+	for point in points:
+		if point.kind!="loot" or not is_instance_valid(point.node):continue
+		for collision in point.node.find_children("*","CollisionShape3D",true,false):
+			collision.set_deferred("disabled",collected.has(point.id))
+
 func apply_building_materials(root:Node3D)->void:
 	for node in root.find_children("*","MeshInstance3D",true,false):
 		for i in range(node.mesh.get_surface_count()):
@@ -99,11 +142,19 @@ func apply_building_materials(root:Node3D)->void:
 				if not building_materials.has(key):
 					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/timber.gdshader");material.set_shader_parameter("timber_color",original.albedo_color);material.set_shader_parameter("floorboards",key.contains("Floor"));building_materials[key]=material
 				node.set_surface_override_material(i,building_materials[key])
+			elif original is StandardMaterial3D and original.resource_name in ["IronOxide","WaxedCanvas","CanvasPatch","BlanketWool","PostalPaint"]:
+				var key:String=original.resource_name
+				if not building_materials.has(key):
+					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/field_surface.gdshader")
+					material.set_shader_parameter("base_color",original.albedo_color);material.set_shader_parameter("metal",key in ["IronOxide","PostalPaint"]);building_materials[key]=material
+				node.set_surface_override_material(i,building_materials[key])
 			elif original is StandardMaterial3D and original.resource_name == "SnowCap":
 				# Runtime material override preserves the authored GLB/Blender assets.
 				if not building_materials.has("SnowCap"):
 					var snow_cap := ShaderMaterial.new()
 					snow_cap.shader = load("res://assets/shaders/roof_snow.gdshader")
+					snow_cap.set_shader_parameter("powder_normal",load("res://assets/textures/snow004/Snow004_1K-PNG_NormalGL.png"))
+					snow_cap.set_shader_parameter("powder_roughness",load("res://assets/textures/snow004/Snow004_1K-PNG_Roughness.png"))
 					building_materials["SnowCap"] = snow_cap
 				node.set_surface_override_material(i,building_materials["SnowCap"])
 
@@ -118,7 +169,8 @@ func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 	invisible_wall(at+Vector3(-4,1.8,0),Vector3(.25,3.4,8))
 	invisible_wall(at+Vector3(4,1.8,0),Vector3(.25,3.4,8))
 	invisible_wall(at+Vector3(0,1.8,-4),Vector3(8,3.4,.25))
-	for x in [-2.65,2.65]:invisible_wall(at+Vector3(x,1.8,4),Vector3(2.7,3.4,.25))
+	for x in [-2.47,2.47]:invisible_wall(at+Vector3(x,1.8,4.05),Vector3(3.06,3.4,.27))
+	for x in [-1.35,1.35]:invisible_wall(at+Vector3(x,.91,4.92),Vector3(.15,1.4,1.60))
 	invisible_wall(at+Vector3(0,.20,4.8),Vector3(2.7,.08,1.8))
 	# A shallow continuous entrance ramp follows the model's porch, avoiding a capsule-catching step.
 	var ramp:=StaticBody3D.new();var collider:=CollisionShape3D.new();var shape:=ConvexPolygonShape3D.new()
@@ -130,9 +182,26 @@ func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 	for p in [Vector3(-1.35,.24,5.65),Vector3(1.35,.24,5.65),Vector3(-1.35,0,6.8),Vector3(1.35,.24,5.65),Vector3(1.35,0,6.8),Vector3(-1.35,0,6.8)]:ramp_mesh.add_vertex(at+p)
 	ramp_mesh.generate_normals();var visible_ramp:=MeshInstance3D.new();visible_ramp.mesh=ramp_mesh.commit();visible_ramp.material_override=mat("584f40");add_child(visible_ramp)
 	for obstruction in [[Vector3(-2.4,.49,-2.22),Vector3(1.50,.50,2.2)],[Vector3(2.6,.79,-2),Vector3(.78,1.10,.78)],[Vector3(1.22,.64,1.44),Vector3(1.45,.8,1.35)]]:invisible_wall(at+obstruction[0],obstruction[1])
+	# Furniture uses the imported floor height, not the removed legacy cubes.
+	for obstruction in [[Vector3(-2.43,.68,-1),Vector3(1.45,.88,1.0)],[Vector3(-2.7,.69,2.5),Vector3(1.48,.90,.83)],[Vector3(.3,1.32,-3.68),Vector3(2.20,2.16,.45)]]:
+		invisible_wall(at+obstruction[0],obstruction[1])
+	var storage_body:=StaticBody3D.new();storage_body.name="StorageCollision";root.add_child(storage_body)
+	var storage_shape:=CollisionShape3D.new();var bounds:=BoxShape3D.new();bounds.size=Vector3(1.22,.81,.84);storage_shape.shape=bounds;storage_shape.position=Vector3(2.4,.405,2.4);storage_shape.disabled=true;storage_body.add_child(storage_shape)
+	if id=="station":
+		var equipment:Node3D=load("res://assets/architecture/station_equipment.glb").instantiate();equipment.name="StationLineEquipment";equipment.position=at;add_child(equipment);apply_building_materials(equipment)
+		invisible_wall(at+Vector3(4.35,2.8,-3),Vector3(.23,5.6,.23))
+		invisible_wall(at+Vector3(4.85,.46,-1.8),Vector3(.8,.85,.74))
 	var flame:MeshInstance3D=root.find_child("FireWindow",true,false);flame.visible=false;fire_meshes[id]=flame
 	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.5,-1.3);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
 	var lamp:=OmniLight3D.new();lamp.position=Vector3(.5,2.2,1.8);lamp.light_color=Color("dfb783");lamp.light_energy=.8;lamp.omni_range=7;root.add_child(lamp)
+	# Interior light does not illuminate outdoor snow through closed walls.
+	# Room/actor bits match InteriorView; the visible porch lantern owns its pool.
+	var room_layer:=2 if id=="home" else 4
+	light.light_cull_mask=room_layer | 8;lamp.light_cull_mask=room_layer | 8
+	var porch_lamp:=OmniLight3D.new();porch_lamp.name="PorchLantern"
+	porch_lamp.position=Vector3(1.31,2.10,4.48);porch_lamp.light_color=Color("eab278")
+	porch_lamp.light_energy=.65;porch_lamp.omni_range=4.6
+	porch_lamp.light_cull_mask=1 | room_layer | 8 | 32;root.add_child(porch_lamp)
 	add_point(id,"fire",at+Vector3(2.6,1.0,-1.35),"铸铁炉 · 添柴")
 	# Identify buildings by silhouette and interior, never a floating nameplate.
 
@@ -153,6 +222,9 @@ func sync_buildings(state)->void:
 		for pair in [["UpgradeBed","bed"],["StorageChest","storage"],["WindowRepairs","insulation"]]:
 			var node:Node3D=buildings[id].find_child(pair[0],true,false)
 			if node:node.visible=id=="home" and bool(state.upgrades[pair[1]])
+
+		var storage_collision:CollisionShape3D=buildings[id].get_node("StorageCollision").get_child(0)
+		storage_collision.set_deferred("disabled",not (id=="home" and state.upgrades.storage))
 
 func stamp_snow(at:Vector3,yaw:float,pressure:float,left:bool)->float:
 	var depth:=snow_depth(at)

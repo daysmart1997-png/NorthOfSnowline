@@ -106,7 +106,7 @@ Mac：
 python3 tools/run_checks.py --godot /Applications/Godot.app/Contents/MacOS/Godot
 ```
 
-也可以设置 `GODOT_BIN` 或把 Godot 加入 PATH。脚本先无界面导入，然后执行室内视野、章节、探索、生存昼夜、雪面/UI、规则、集成、细节与地形九组检查；可用 `--suite rules`、`--suite day_cycle` 等只选一组。它同时检查退出码、成功标记和错误信息，输出保存在不提交的 `artifacts/checks-*.log`。
+也可以设置 `GODOT_BIN` 或把 Godot 加入 PATH。脚本先无界面导入，然后执行界面/声音、角色步态、视觉样板、室内视野、章节、探索、生存昼夜、雪面/UI、规则、集成、细节与地形十二组检查；可用 `--suite presentation`、`--suite ranger`、`--suite rules`、`--suite day_cycle` 等只选一组。它同时检查退出码、成功标记和错误信息，输出保存在不提交的 `artifacts/checks-*.log`。
 
 图形改动还应实际启动游戏检查中文布局、开合背包、行走贴坡、脚印、木屋切顶、声音和帧率。首次 Mac 试玩后将结果写入 `PROGRESS.md`。测试存档与玩家存档分开；玩家存档留在本地，不随 Git 自动同步。
 
@@ -142,3 +142,8 @@ Windows 可以直接使用 `.venv\Scripts\python.exe` 执行 pip 和脚本，无
 - `.gitignore` 无法识别写在源码里的 API Key；提交前的本地扫描是补充保护，不是所有凭据的完备证明。实际项目当前运行不需要 API Key，不创建虚假的 `.env` 配置。
 - `docs/01～07` 是历史开发记录，其中旧 D 盘路径、日志和截图描述属于制作历史；日志与临时截图不随克隆。最新接续说明以 `PROGRESS.md` 为准。
 - 未替原创代码、美术选择开源许可证；保留第三方 CC0 说明。是否公开仓库和采用何种许可证由项目所有者决定。
+
+
+### 第一章失联与碰撞回归
+
+新版状态、资产重建入口和边界见 [18_LOST_CONTACT_AND_WORLD_REFINEMENT.md](18_LOST_CONTACT_AND_WORLD_REFINEMENT.md)。run_checks.py 已纳入 revision，共十三组。原生画面可运行 tools/revision_preview.tscn（--revision-output=revision-1080 可分开输出）、tools/ranger_check.tscn -- --ranger-capture。测试输出写 artifacts，不覆盖玩家存档。

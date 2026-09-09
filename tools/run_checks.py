@@ -8,6 +8,13 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "aim": (["--fixed-fps", "60", "--quit-after", "1800", "tools/aim_check.tscn", "--", "--isolated-settings"], "AIM_OK"),
+    "hunting": (["--fixed-fps", "60", "--quit-after", "1800", "tools/hunting_check.tscn", "--", "--isolated-settings"], "HUNTING_OK"),
+    "field": (["--fixed-fps", "60", "--quit-after", "1800", "tools/field_check.tscn", "--", "--isolated-settings"], "FIELD_OK"),
+    "revision": (["--fixed-fps", "60", "--quit-after", "1800", "tools/revision_check.tscn", "--", "--isolated-settings"], "REVISION_OK"),
+    "presentation": (["--fixed-fps", "60", "--quit-after", "1800", "tools/presentation_check.tscn", "--", "--isolated-settings"], "PRESENTATION_OK"),
+    "ranger": (["--fixed-fps", "60", "--quit-after", "1800", "tools/ranger_check.tscn", "--", "--isolated-settings"], "RANGER_CHECK_OK"),
+    "visual_slice": (["--fixed-fps", "60", "--quit-after", "1800", "tools/visual_slice_check.tscn", "--", "--isolated-settings"], "VISUAL_SLICE_CHECK_OK"),
     "interior": (["--fixed-fps", "60", "--quit-after", "1800", "tools/interior_check.tscn", "--", "--isolated-settings"], "INTERIOR_OK"),
     "chapter": (["--fixed-fps", "60", "--quit-after", "1800", "tools/chapter_check.tscn", "--", "--isolated-settings"], "CHAPTER_OK"),
     "exploration": (["--fixed-fps", "60", "--quit-after", "1800", "tools/exploration_check.tscn", "--", "--isolated-settings"], "EXPLORATION_OK"),
@@ -32,6 +39,10 @@ def main():
         parser.error("Provide --godot, set GODOT_BIN, or put Godot on PATH.")
     output = ROOT / "artifacts"
     output.mkdir(exist_ok=True)
+    # These test saves/settings are deliberately ignored by Git. A fresh
+    # checkout must be able to run the suites without old local artifacts.
+    for directory in ("interior", "chapter", "exploration", "field"):
+        (output / directory).mkdir(exist_ok=True)
     tasks = [("import", (["--editor", "--import", "--quit"], None))]
     tasks += list(CHECKS.items()) if args.suite == "all" else [(args.suite, CHECKS[args.suite])]
     for name, (extra, marker) in tasks:

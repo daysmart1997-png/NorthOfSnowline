@@ -1,0 +1,21 @@
+{
+  "asset": "ambientCG Snow004",
+  "author": "Lennart Demes / ambientCG",
+  "source": "https://ambientcg.com/view?id=Snow004",
+  "license": "CC0-1.0",
+  "license_url": "https://docs.ambientcg.com/license/",
+  "download": "https://ambientcg.com/get?file=Snow004_1K-PNG.zip",
+  "archive_sha256": "ed08bcfdcc0a57e815dba6fc64429d7498773be41381fdf35efc5b771e286472",
+  "files": [
+    {
+      "name": "Snow004_1K-PNG_NormalGL.png",
+      "sha256": "dd03ca7969428516164c2557fa0ba43bac52e5f0c0c11f542b9c6e597c09b557",
+      "bytes": 5493965
+    },
+    {
+      "name": "Snow004_1K-PNG_Roughness.png",
+      "sha256": "b1cc34f87a6dced8facc3ec3624280549822cb6164d5847906557e219227b87f",
+      "bytes": 755759
+    }
+  ]
+}

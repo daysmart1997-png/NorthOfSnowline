@@ -26,7 +26,7 @@ def box(name,at,size,material,parent,bevel=.014):
  bpy.ops.mesh.primitive_cube_add(size=1,location=v(at));o=bpy.context.object;o.scale=(size[0],size[2],size[1]);finish(o,name,material,parent)
  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
  if bevel:
-  mod=o.modifiers.new('Worn edges','BEVEL');mod.width=bevel;mod.segments=1;bpy.ops.object.modifier_apply(modifier=mod.name)
+  mod=o.modifiers.new('Worn edges','BEVEL');mod.width=bevel;mod.segments=2;bpy.ops.object.modifier_apply(modifier=mod.name)
  return o
 def beam(name,a,b,r,material,parent,sides=8):
  delta=v(b)-v(a);bpy.ops.mesh.primitive_cylinder_add(vertices=sides,radius=r,depth=delta.length,location=(v(a)+v(b))/2)
@@ -101,7 +101,7 @@ for z in [-4,4]:
  for i in range(22):
   x=-3.85+i*.367
   if z>0 and abs(x)<1.16:continue
-  box('Vertical siding',(x,1.53,z),(.355,3.06,.13),rust if i%4 else wood,wall)
+  box('Vertical siding',(x,1.53+math.sin(i*7.1)*.016,z),(.350,3.06,.13),rust if i%4 else wood,wall)
  if z>0:box('Door lintel',(0,2.92,z),(2.45,.35,.23),wood,wall)
  mesh('Gable', [(-4,3.1,z),(4,3.1,z),(0,5.05,z)],[(0,1,2)],rust,roof)
  for a,b in [((-4,3.1,z),(0,5.05,z)),((0,5.05,z),(4,3.1,z)),((-4,3.1,z),(4,3.1,z))]:beam('Gable timber',a,b,.13,wood,roof,4)
@@ -179,11 +179,27 @@ beam('Chimney cap',(2.6,4.50,-2),(2.6,4.63,-2),.23,iron,roof,12)
 for i in range(4):log((3.2,.12+i*.14,-1),(3.8,.12+i*.14,-1),.075,inside)
 box('Woven rug',(0,.012,.05),(1.72,.016,1.35),wool,inside,.008)
 for x in [-.76,.76]:box('Rug trim',(x,.024,.05),(.028,.008,1.28),rope,inside,.001)
+# Construction and maintenance traces belong to structural cutaway groups.
+for x in [-4.10,4.10]:
+ wall=frame if x<0 else right
+ for y in [.34,2.70]:box('Weather batten',(x,y,0),(.11,.12,8.10),wood,wall,.016)
+ for z in [-3.72,3.72]:
+  box('Corner iron strap',(x,1.08,z),(.025,.44,.24),iron,wall,.006)
+for x in [-2.55,2.55]:
+ for dx in [-.44,.44]:beam('Sill bracket',(x+dx,.94,4.10),(x+dx,1.20,4.35),.043,wood,front,6)
+# Paper is physically on the receiver; its legible contents are in the journal.
+box('Old circuit card',(-2.4,1.218,-1.08),(.29,.012,.21),paper,inside,.004)
+box('Retired circuit stamp',(-2.4,1.226,-1.08),(.13,.004,.028),rust,inside,.001)
+for y in [.97,1.03,1.09]:box('Speaker grille',(-2.61,y,-.92),(.10,.012,.012),iron,inside,.002)
 export(root,'cabin')
 
 root=start('ForestryBridge');frame=group('BridgeTimbers',root)
 for x in [-1.7,1.7]:box('Longitudinal girder',(x,-.28,0),(.25,.42,18.5),wood,frame)
-for i in range(48):box('Deck plank',(0,.03,-8.81+i*.375),(4.7,.14,.353),floor,frame,.012)
+for i in range(48):
+ z=-8.81+i*.375
+ box('Deck plank',(0,.03,z),(4.7,.14,.353),floor if i%5 else wood,frame,.012)
+ for x in [-1.70,1.70]:
+  box('Recessed deck nail',(x,.101,z),(.034,.008,.034),iron,frame,.003)
 for z in [-7.5,-3.75,0,3.75,7.5]:
  box('Cross beam',(0,-.44,z),(5.3,.30,.30),wood,frame)
  for x in [-2.2,2.2]:
@@ -235,3 +251,29 @@ beam('Kettle',(1.1,.51,2.65),(1.1,.75,2.65),.17,iron,gear,12)
 lantern((-.9,.28,1.5),gear)
 export(root,'camp')
 print('ARCHITECTURE_COMPLETE: cabin, bridge, camp; editable .blend sources')
+
+# Reusable field crate replaces legacy featureless cubes. Same dimensions as
+# its runtime collision: width .86, depth .64, height .53.
+root=start('FieldSupplyCrate');frame=group('CrateBody',root)
+for side in [-1,1]:
+ for i in range(3):
+  box('Crate horizontal stave',(0,.11+i*.13,side*.295),(.82,.122,.05),floor if i==1 else wood,frame,.009)
+ for z in [-.20,0,.20]:box('Crate end stave',(side*.397,.245,z),(.055,.42,.19),wood,frame,.008)
+ for x in [-.31,.31]:box('Crate reinforcing strap',(x,.25,side*.324),(.052,.46,.018),iron,frame,.004)
+for i in range(4):box('Lid board',(-.315+i*.21,.493,0),(.202,.055,.64),floor,frame,.010)
+box('Clasp',(0,.405,.326),(.08,.13,.024),iron,frame,.005)
+box('Routing label',(.10,.524,.08),(.21,.009,.15),paper,frame,.002)
+for z in [-.045,0,.045]:box('Label line',(.10,.530,.08+z),(.145,.004,.007),wood,frame,.001)
+export(root,'supply_crate')
+
+# Station-only silhouette: retired line spool, utility mast, cable cleats.
+root=start('StationLineEquipment');frame=group('StationEquipment',root)
+beam('Line mast',(4.35,0,-3.0),(4.35,6.2,-3.0),.11,wood,frame,10)
+box('Crossarm',(4.35,5.8,-3),(1.30,.12,.15),wood,frame)
+for x in [3.85,4.35,4.85]:
+ beam('Ceramic insulator',(x,5.8,-3),(x,6.02,-3),.08,paper,frame,8)
+# The mast carries cut wires, not a new powered gameplay node.
+beam('Severed feeder',(4.35,5.55,-3),(4.70,4.2,-2.88),.017,iron,frame,6)
+for z in [-2.1,-1.5]:beam('Cable reel flange',(4.85,.46,z-.055),(4.85,.46,z+.055),.40,wood,frame,12)
+beam('Wound cable',(4.85,.46,-2.1),(4.85,.46,-1.5),.28,iron,frame,12)
+export(root,'station_equipment')

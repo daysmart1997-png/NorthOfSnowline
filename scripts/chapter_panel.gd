@@ -11,17 +11,17 @@ var radio_sound:AudioStreamPlayer
 var route_status:Label
 
 func setup(main)->void:
-	game=main;name="ChapterPanel";position=Vector2(260,82);custom_minimum_size=Vector2(760,556)
-	var surface=Palette.box(Palette.PANEL);surface.content_margin_left=32;surface.content_margin_right=32;surface.content_margin_top=24;surface.content_margin_bottom=24
+	game=main;name="ChapterPanel";position=Vector2(650,52);custom_minimum_size=Vector2(580,616)
+	var surface=Palette.paper();surface.content_margin_left=32;surface.content_margin_right=32;surface.content_margin_top=24;surface.content_margin_bottom=24
 	add_theme_stylebox_override("panel",surface)
 	var column:=VBoxContainer.new();column.add_theme_constant_override("separation",14);add_child(column)
-	column.add_child(game.label("第一章  /  最后一班电波",14,Palette.MUTED))
-	title_label=game.label("",24);column.add_child(title_label)
-	scroll=ScrollContainer.new();scroll.custom_minimum_size=Vector2(696,230);scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;column.add_child(scroll)
-	body_label=game.label("",17);body_label.name="ChapterText";body_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;scroll.add_child(body_label)
-	route_status=game.label("",14,Palette.ACCENT);route_status.name="ReturnConditions";route_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;column.add_child(route_status)
+	column.add_child(game.label("七号值守簿  /  第一章 · 失联",14,Color("596061")))
+	title_label=game.label("",24,Color("253238"));column.add_child(title_label)
+	scroll=ScrollContainer.new();scroll.custom_minimum_size=Vector2(516,230);scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;column.add_child(scroll)
+	body_label=game.label("",17,Color("344044"));body_label.name="ChapterText";body_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;body_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;scroll.add_child(body_label)
+	route_status=game.label("",14,Color("755433"));route_status.name="ReturnConditions";route_status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;column.add_child(route_status)
 	choices=VBoxContainer.new();choices.add_theme_constant_override("separation",8);column.add_child(choices)
-	column.add_child(game.label("阅读时已暂停  ·  Esc 暂时收起  ·  记录保留在探索手记",13,Palette.MUTED))
+	column.add_child(game.label("阅读时已暂停  ·  Esc 暂时收起  ·  记录保留在探索手记",13,Color("616564")))
 	radio_sound=AudioStreamPlayer.new();radio_sound.bus="SnowEffects";radio_sound.volume_db=-23;add_child(radio_sound)
 	var sample:=AudioStreamWAV.new();sample.format=AudioStreamWAV.FORMAT_16_BITS;sample.mix_rate=22050
 	var bytes:=PackedByteArray();bytes.resize(6615*2)
@@ -38,7 +38,7 @@ func show_scene(kind:String)->void:
 	scene_kind=kind;visible=true;refresh()
 
 func option(id:String,text:String,callback:Callable)->void:
-	var control:Button=game.button(text,callback,choices);control.name="Story_"+id;control.add_theme_font_size_override("font_size",16)
+	var control:Button=game.button(text,callback,choices);control.name="Story_"+id;control.add_theme_font_size_override("font_size",16);Palette.paper_button(control)
 
 func refresh()->void:
 	for child in choices.get_children():choices.remove_child(child);child.queue_free()
@@ -50,13 +50,33 @@ func refresh()->void:
 		title_label.text="没能发出的平安报"
 		body_label.text=Chapter.CLUES.home_log.text
 		option("leave","收好记录 · 准备出发",game.close_story)
+		option("replay_opening","回看开场",func():game.close_story();game.opening.begin())
 	elif scene_kind=="station":
 		title_label.text="留给后来的人"
-		body_label.text="备用模块下的交接单写着：\n\n‘末班车取消，人员撤往谷口。模块留下，供沿线小屋求援。送药的林和守桥人尚未回报；西岭转运箱里留有收信簿。’\n\n车站已经撤空，小屋的无线电是你与外界的联系。先带零件回家，或在物资允许时查清两人的下落。完整交接单已收进手记。"
+		body_label.text=Chapter.CLUES.station_dispatch.text
 		route_status.text=return_conditions()
 		option("direct","沿铁路返家 · 路程直接，迎风更冷",func():select_route("direct"))
 		option("sheltered","沿林道返家 · 绕远一些，沿途可避风",func():select_route("sheltered"))
 		option("ridge","绕访西岭 · 可选收信簿，高地迎风",func():select_route("ridge"))
+	elif scene_kind=="epilogue":
+		match int(s.chapter.epilogue_step):
+			0:
+				title_label.text="还有一个声音"
+				body_label.text="你以为谷口还有话没说完。\n\n但指针停在刻度边缘。那里贴着一张褪色线路卡：‘三号气象线路 · 停用。’\n\n灰尘下面，还能辨认出‘北坡中继’的字样。"
+				option("listen","试着听清",func():listen("listen"))
+				option("later","稍后再听",game.close_story)
+			1:
+				title_label.text="没有回应的呼号"
+				body_label.text=Chapter.CLUES.old_channel_fragment.text
+				option("check_card","核对线路卡",func():listen("check_card"))
+			2:
+				title_label.text="三号线路"
+				body_label.text=Chapter.CLUES.old_channel_card.text
+				option("record","记下线索 · 先准备补给",func():listen("record"))
+			3:
+				title_label.text="第一章 · 失联"
+				body_label.text="谷口已经收到了你的平安报。周岑尚未出现在他们核对到的名单里。\n\n旧频道留下了警告、‘三号’和残缺呼号。线路卡指向北坡中继；说话者与警告的含义仍未确认。原句和通话已收进手记。\n\n先补齐木柴、饮水和食物。要去找人，得能从山里回来。\n\n第一章已完成。你可以继续探索林区、修缮小屋和准备补给。第二章的气象站区域尚未开放。"
+				option("finish","回到小屋",game.close_story)
 	else:
 		match int(s.chapter.radio_step):
 			1:
@@ -65,7 +85,7 @@ func refresh()->void:
 				option("call","按下通话键 · 报告位置",func():transmit("call"))
 			2:
 				title_label.text="谷口有人守听"
-				body_label.text="你：这里是护林小屋。下山公路被山崩截断，只有我一个人。能听见吗？\n\n电流声停了一瞬。\n\n谷口值守：听见了。我们还在。你那里能生火吗？北岭的人已经撤了，沿路有没有留下消息？"
+				body_label.text="你：谷口，这里是七号护林小屋。下山公路被山崩截断，目前只有我一个人。能听见吗？\n\n谷口值守：七号，听见了。我们还在。你那里炉子还能用吗？\n\n你：能用。先记下我的位置。北岭四回来过没有？\n\n谷口值守：周岑？到达名单里还没有他。我们会继续核对。你沿路看见其他人的消息了吗？"
 				option("report","报告沿途发现",func():transmit("report"))
 				option("ask","先询问下山的办法，再报告发现",func():transmit("ask"))
 			3:
@@ -73,9 +93,9 @@ func refresh()->void:
 				body_label.text=Chapter.radio_response(s)
 				option("confirm","回复：收到。我会守住小屋。",func():transmit("confirm"))
 			_:
-				title_label.text="第一章 · 平安报"
-				body_label.text="谷口值守：明晚，同一频道。\n\n你松开通话键。屋里仍然很冷，但这间小屋终于不再是地图上无人知晓的一点。\n\n本章已完成。你可以继续在现有林区寻找遗漏的记录、准备补给、修缮小屋。北坡信标的故事留待下一章。"
-				option("finish","收起听筒 · 留在林区休整",game.close_story)
+				title_label.text="平安报已送达"
+				body_label.text="谷口值守：下次傍晚，同一频道。七号，我们记着你。\n\n你松开通话键。屋里仍然很冷，但谷口已经知道，这里还有一个人。"
+				option("finish","收起听筒",game.close_story)
 	if choices.get_child_count()>0:choices.get_child(0).grab_focus()
 
 func return_conditions()->String:
@@ -93,3 +113,7 @@ func shutdown_audio()->void:
 	if is_instance_valid(radio_sound):radio_sound.stop();radio_sound.stream=null
 
 func _exit_tree()->void:shutdown_audio()
+
+func listen(choice:String)->void:
+	if Chapter.advance_epilogue(game.survival,choice):
+		radio_sound.play();refresh()
