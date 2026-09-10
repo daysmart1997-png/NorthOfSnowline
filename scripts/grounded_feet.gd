@@ -22,16 +22,22 @@ func _process_modification()->void:
 		var l1:=h.origin.distance_to(k.origin);var l2:=k.origin.distance_to(f.origin)
 		var axis:Vector3=(target-h.origin).normalized();var distance:=clampf(target.distance_to(h.origin),.12,l1+l2-.001)
 		target=h.origin+axis*distance
-		var front:=Vector3(0,0,-1);var bend:Vector3=(front-axis*front.dot(axis)).normalized()
+		# Preserve the authored knee plane, including turning and running.
+		var authored:=k.origin-h.origin
+		var bend:Vector3=authored-axis*authored.dot(axis)
+		if bend.length_squared()<.000001:
+			bend=Vector3.FORWARD-axis*Vector3.FORWARD.dot(axis)
+		bend=bend.normalized()
 		var along:float=(l1*l1-l2*l2+distance*distance)/(2*distance)
 		var joint:Vector3=h.origin+axis*along+bend*sqrt(maxf(0,l1*l1-along*along))
 		var h_rotation:=Quaternion((k.origin-h.origin).normalized(),(joint-h.origin).normalized())
 		var k_rotation:=Quaternion((f.origin-k.origin).normalized(),(target-joint).normalized())
 		h.basis=Basis(h_rotation)*h.basis;k.basis=Basis(k_rotation)*k.basis;k.origin=joint
-		var ground_normal:Vector3=transform.basis.inverse()*Vector3(sample.normal)
-		var smoothed:Vector3=Vector3(contact_normals.get(side,ground_normal)).slerp(ground_normal,clampf(get_process_delta_time()*12,0,1)).normalized()
+		var ground_normal:Vector3=(transform.basis.inverse()*Vector3(sample.normal)).normalized()
+		var smoothed:Vector3=Vector3(contact_normals.get(side,ground_normal)).lerp(ground_normal,clampf(get_process_delta_time()*12,0,1)).normalized()
 		contact_normals[side]=smoothed
 		var alignment:=Quaternion(Vector3.UP,smoothed)
-		f.basis=Basis(Quaternion.IDENTITY.slerp(alignment,.8))*f.basis;f.origin=target
+		var planted:float=clampf(1.0-maxf(0,f.origin.y-.19)/.10,0,1)
+		f.basis=Basis(Quaternion.IDENTITY.slerp(alignment,.65*planted))*f.basis;f.origin=target
 		skel.set_bone_global_pose(hip,h);skel.set_bone_global_pose(knee,k);skel.set_bone_global_pose(foot,f)
 		adjustments+=1

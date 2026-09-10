@@ -68,6 +68,7 @@ func track(at:Vector3,yaw:float,species:String)->void:
   tracks.multimesh.set_instance_transform(track_index%192,Transform3D(Basis(Vector3.UP,yaw).scaled(Vector3(radius,1,radius*1.4)),p));track_index+=1
 
 func reset()->void:
+ shutdown_spatial_audio()
  cancel_aim()
  feedback.traces.clear();feedback.preview.clear()
  release_audio.stop()
@@ -150,7 +151,7 @@ func start_job(kind:String,id:String)->String:
    seconds=10 if a.meat>0 else 20;title="取肉 0.5 kg" if a.meat>0 else "收取生皮"
   "module":
    if s.kit.module_ready:return "模块已测试，可以取下。"
-   seconds=8;title=["清理接点","固定接线","测试发射模块"][mini(s.kit.route_stage,2)]
+   seconds=[3.0,4.0,2.5][mini(s.kit.route_stage,2)];title=["擦净氧化接点","固定松脱导线","按下测试 · 观察指针"][mini(s.kit.route_stage,2)]
   _:return "未知操作。"
  job={"kind":kind,"id":id,"duration":seconds,"origin":game.player.position,"shelter":shelter,"title":title,"health":s.health};progress=0
  game.backpack.visible=false;game.active=true;game.player.enabled=true;game.player.velocity=Vector3.ZERO
@@ -167,7 +168,8 @@ func finish_job()->void:
   "craft":message=s.craft(done.id,done.shelter)
   "module":
    s.kit.route_stage=mini(3,s.kit.route_stage+1);s.kit.module_ready=s.kit.route_stage>=3
-   message="测试通过。按 E 取下模块。" if s.kit.module_ready else "这一步已完成。按 E 继续检查。"
+   game.experience.module_completed(s.kit.route_stage)
+   message="指针稳定，测试通过。按 E 取下模块。" if s.kit.module_ready else "这一步已完成。按 E 继续检查。"
   "harvest":
    var a=find_animal(done.id)
    if a!=null and a.hp<=0 and (a.meat>0 or a.hide_count>0):
@@ -199,7 +201,7 @@ func noise(at:Vector3,radius:float)->void:
  for a in animals:
   if a.hp>0 and a.position.distance_to(at)<radius:a.last_known=at;a.memory=7;a.alert=maxf(a.alert,.6)
 
-func animal_sound(kind:String)->void:
+func animal_sound(kind:String,at:Vector3=Vector3.INF)->void:
  var wav:=AudioStreamWAV.new();wav.format=AudioStreamWAV.FORMAT_16_BITS;wav.mix_rate=22050
  var length:=.65 if kind=="cough" else .9
  var bytes:=PackedByteArray();var n:=int(22050*length);bytes.resize(n*2)
@@ -210,7 +212,11 @@ func animal_sound(kind:String)->void:
   if kind=="cough":envelope*=pow(maxf(0,sin(t*29)),3)
   var value:=smooth*.5+sin(t*TAU*(76 if kind=="bear" else 112))*.25
   bytes.encode_s16(i*2,int(value*envelope*6500))
- wav.data=bytes;audio.stream=wav;audio.play()
+ wav.data=bytes
+ if at.is_finite():
+  var voice:=AudioStreamPlayer3D.new();voice.bus="SnowEffects";voice.volume_db=-11;voice.max_distance=32;voice.unit_size=7
+  add_child(voice);voice.global_position=at+Vector3.UP;voice.stream=wav;voice.finished.connect(voice.queue_free);voice.play()
+ else:audio.stream=wav;audio.play()
 
 func update_held()->void:
  var signature:String=game.survival.kit.weapon+str(game.survival.count(game.survival.kit.weapon)>0)
@@ -324,6 +330,8 @@ func shoot(target:Vector3,aiming:bool)->void:
 
 func _process(delta:float)->void:
  if game==null or not game.started:return
+ for voice in get_children():
+  if voice is AudioStreamPlayer3D:voice.stream_paused=not game.active
  if not game.active:cancel_aim();return
  var s=game.survival
  cooldown=maxf(0,cooldown-delta)
@@ -368,3 +376,11 @@ func _physics_process(delta:float)->void:
  for p in projectiles:
   var at:Vector3=p.mesh.position;var v:Vector3=p.velocity
   s.kit.flights.append({"position":[at.x,at.y,at.z],"velocity":[v.x,v.y,v.z],"age":p.age})
+
+func shutdown_spatial_audio()->void:
+ for voice in get_children():
+  if voice is AudioStreamPlayer3D:
+   voice.stream_paused=false;voice.stop();voice.stream=null;voice.queue_free()
+
+func _exit_tree()->void:
+ shutdown_spatial_audio()

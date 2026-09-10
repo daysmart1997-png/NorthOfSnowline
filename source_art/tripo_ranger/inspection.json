@@ -1,0 +1,49 @@
+{
+  "source_sha256": "991b12ede9cde6216a95a15f2ef07f8abe4bee295f1972e29fbda3abe9ab20f9",
+  "meshes": [
+    {
+      "name": "a1db25bc_877e_412d_bd5f_1220a9f79920",
+      "vertices": 5442,
+      "polygons": 10783,
+      "triangles": 10783,
+      "uv_layers": [],
+      "materials": [
+        "a1db25bc_877e_412d_bd5f_1220a9f79920"
+      ],
+      "vertex_groups": 0,
+      "modifiers": [],
+      "dimensions": [
+        0.29638671875,
+        0.55517578125,
+        0.99951171875
+      ],
+      "bounds_min": [
+        -0.148193359375,
+        -0.277587890625,
+        0.0
+      ],
+      "bounds_max": [
+        0.148193359375,
+        0.277587890625,
+        0.99951171875
+      ],
+      "boundary_edges": 89,
+      "nonmanifold_edges": 0,
+      "loose_edges": 0,
+      "connected_components": [
+        5046,
+        201,
+        56,
+        41,
+        25,
+        25,
+        16,
+        16,
+        16
+      ]
+    }
+  ],
+  "armatures": 0,
+  "actions": 0,
+  "images": []
+}

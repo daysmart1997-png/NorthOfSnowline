@@ -113,8 +113,8 @@ func _physics_process(delta: float) -> void:
 	var direction := Basis(Vector3.UP, pivot.rotation.y) * Vector3(input.x, 0, input.y)
 	sprinting = Input.is_action_pressed("sprint") and can_sprint and input.length() > 0.1 and not crouching
 	var speed := (3.8 if sprinting else (0.85 if crouching else 1.65)) * move_factor
-	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 18.0)
-	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 18.0)
+	velocity.x = move_toward(velocity.x, direction.x * speed, delta * (12.0 if input.length()<.1 else 9.0))
+	velocity.z = move_toward(velocity.z, direction.z * speed, delta * (12.0 if input.length()<.1 else 9.0))
 	if not is_on_floor():
 		velocity.y -= 18.0 * delta
 	else:
@@ -123,7 +123,7 @@ func _physics_process(delta: float) -> void:
 	if position.distance_to(last_footprint) > 0.64 and is_on_floor():
 		leave_footprint()
 	if direction.length() > 0.1:
-		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), delta * 10.0)
+		visual.rotation.y = lerp_angle(visual.rotation.y, atan2(-direction.x, -direction.z), (1.0-exp(-delta*10.0)))
 	var moving := Vector2(velocity.x, velocity.z).length()
 	cycle += delta * moving * 2.7
 	if not legs.is_empty():

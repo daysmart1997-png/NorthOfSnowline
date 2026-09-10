@@ -177,6 +177,8 @@ func item_details(right:VBoxContainer,s)->void:
 	var desc:Label=game.label(Rules.ITEMS[selected].description,15);desc.custom_minimum_size.x=414;desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(desc)
 	right.add_child(game.label("%s  ·  随身 %d / 储存 %d  ·  %.2f kg/份"%[GROUPS[group_of(selected)],s.count(selected),int(s.storage.get(selected,0)),Rules.ITEMS[selected].weight],13,Palette.MUTED))
 	var usable:=selected in ["food","water","tea","bandage","battery","player","medicine","splint","cooked_meat","raw_meat","knife","bow","rifle"] or Rules.Kit.GEAR.has(selected) or selected.begins_with("tape_")
+	if selected=="tape_home" and s.count("tape_home")>0:
+		game.button("展开周岑留下的内页",func():game.open_story("tape_note"),right).name="TapeNote"
 	if usable:
 		var use_button=game.button("装入磁带机" if selected.begins_with("tape_") else ("播放 / 停止" if selected=="player" else ("应急生食 · 会引起食物不适" if selected=="raw_meat" else "使用一份")),func():do_action("use",selected),right);use_button.disabled=s.count(selected)<=0
 	elif selected!="parts":game.button("查看制作配方",func():tab="craft";refresh(),right)

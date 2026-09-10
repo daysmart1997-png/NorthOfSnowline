@@ -46,7 +46,13 @@ func refresh()->void:
 	scroll.scroll_vertical=0
 	route_status.visible=scene_kind=="station"
 	scroll.custom_minimum_size.y=190 if scene_kind=="station" else 230
-	if scene_kind=="intro":
+	body_label.add_theme_font_size_override("font_size",20 if game.preferences.large_text else 17)
+	if scene_kind=="tape_note":
+		title_label.text=Chapter.CLUES.tape_home_note.title;body_label.text=Chapter.CLUES.tape_home_note.text
+		Chapter.discover(s,"tape_home_note")
+		option("leave","收好内页",game.close_story)
+		option("replay","再看一遍",func():scroll.scroll_vertical=0;game.experience.sound("tape_button"))
+	elif scene_kind=="intro":
 		title_label.text="没能发出的平安报"
 		body_label.text=Chapter.CLUES.home_log.text
 		option("leave","收好记录 · 准备出发",game.close_story)
@@ -94,7 +100,7 @@ func refresh()->void:
 				option("confirm","回复：收到。我会守住小屋。",func():transmit("confirm"))
 			_:
 				title_label.text="平安报已送达"
-				body_label.text="谷口值守：下次傍晚，同一频道。七号，我们记着你。\n\n你松开通话键。屋里仍然很冷，但谷口已经知道，这里还有一个人。"
+				body_label.text="谷口值守：下次傍晚，同一频道。七号，我们记着你。\n\n你松开通话键，等了一会儿。听筒里没有再催你赶路。\n\n谷口记下了你的位置。这一次，你可以先照顾好自己。"
 				option("finish","收起听筒",game.close_story)
 	if choices.get_child_count()>0:choices.get_child(0).grab_focus()
 
@@ -107,7 +113,7 @@ func select_route(route:String)->void:
 
 func transmit(choice:String)->void:
 	if Chapter.advance_radio(game.survival,choice):
-		radio_sound.play();refresh()
+		game.experience.radio_event(int(game.survival.chapter.radio_step));refresh()
 
 func shutdown_audio()->void:
 	if is_instance_valid(radio_sound):radio_sound.stop();radio_sound.stream=null

@@ -1,0 +1,36 @@
+{
+  "height": 1.88,
+  "bones": 41,
+  "atlas_source": [
+    8192,
+    8192
+  ],
+  "atlas_runtime": [
+    2048,
+    2048
+  ],
+  "surfaces": {
+    "detail": 1385,
+    "head": 790,
+    "torso": 3090,
+    "hands": 1308,
+    "legs": 1064,
+    "feet": 2513,
+    "pack": 633
+  },
+  "clips": {
+    "Consume": 41,
+    "CrouchIdle": 111,
+    "CrouchWalk": 77,
+    "Idle": 95,
+    "Interact": 76,
+    "Pickup": 33,
+    "Run": 27,
+    "Walk": 51
+  },
+  "source_filename": "tripo_convert_0bcbfe0e-64fe-47e2-870f-4e3267511f91.glb",
+  "source_sha256": "3c1f663499990b994bc235542ddbfc6a8baf9176629c8dbe8dc13c0ee423c9d0",
+  "source_bytes": 16849092,
+  "triangles": 10783,
+  "blender": "5.2.1 LTS"
+}

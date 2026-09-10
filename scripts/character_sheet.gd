@@ -22,7 +22,7 @@ func setup(main,owner_bag)->void:
   b.name="BodyMode" if mode else "ClothingMode"
  var view:=SubViewportContainer.new();view.custom_minimum_size=Vector2(460,290);view.size_flags_vertical=Control.SIZE_EXPAND_FILL;view.stretch=true;left.add_child(view)
  var vp:=SubViewport.new();vp.size=Vector2i(460,320);vp.transparent_bg=true;vp.own_world_3d=true;vp.render_target_update_mode=SubViewport.UPDATE_ALWAYS;view.add_child(vp)
- preview=load("res://assets/characters/ranger_equipment.glb").instantiate();vp.add_child(preview);preview.rotation.y=angle
+ preview=game.player.MODEL.instantiate();vp.add_child(preview);preview.rotation.y=angle
  apply_clothes(preview,game.survival.kit)
  var players:=preview.find_children("*","AnimationPlayer",true,false)
  if not players.is_empty() and game.player.animation_names.has("Idle"):
@@ -111,6 +111,17 @@ static func apply_clothes(root:Node,kit)->void:
    if slot.is_empty():continue
    var g:Dictionary=kit.owned[kit.equipped[slot]]
    var tint:=Color(Kit.GEAR[g.type].color).darkened(float(g.wet)/100*.23)
+   if name.ends_with("_Tripo") and original is StandardMaterial3D and original.albedo_texture!=null:
+    var defaults:Dictionary={"head":"cap","torso":"coat","hands":"gloves","legs":"trousers","feet":"boots","pack":"pack"}
+    var source:=Color(Kit.GEAR[defaults[slot]].color)
+    var chosen:=Color(Kit.GEAR[g.type].color)
+    var factor:=Vector3(chosen.r/source.r,chosen.g/source.g,chosen.b/source.b)
+    var textured:=ShaderMaterial.new();textured.shader=preload("res://assets/shaders/tripo_clothing.gdshader")
+    textured.set_shader_parameter("atlas",original.albedo_texture)
+    textured.set_shader_parameter("dye_factor",factor)
+    textured.set_shader_parameter("wetness",float(g.wet)/100)
+    textured.set_shader_parameter("protect_warm_details",slot in ["torso","legs","hands"])
+    node.set_surface_override_material(surface,textured);continue
    if name.contains("Brass") or (slot in ["pack","torso"] and name.contains("Leather")):
     node.set_surface_override_material(surface,null);continue
    if name.contains("Wool") or name.contains("Canvas"):

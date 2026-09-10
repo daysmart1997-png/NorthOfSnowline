@@ -63,7 +63,9 @@ func check_field()->void:
  get_tree().quit()
 
 func shot(name:String)->void:
- await RenderingServer.frame_post_draw
+ # Explicit draw also captures when macOS occludes the test window.
+ await get_tree().process_frame
+ RenderingServer.force_draw(false)
  var folder:="field"
  for arg in OS.get_cmdline_user_args():
   if arg.begins_with("--field-output="):folder=arg.trim_prefix("--field-output=")

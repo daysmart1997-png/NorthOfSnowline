@@ -1,5 +1,7 @@
 extends Node
+signal shutdown_requested
 signal breath_pulse(effort:float)
+var cue_seconds:=12.0
 var speaker:AudioStreamPlayer
 var current_tape:=""
 var wind:AudioStreamPlayer
@@ -25,7 +27,7 @@ func _ready()->void:
 	speaker=AudioStreamPlayer.new();speaker.volume_db=-13;add_child(speaker)
 	wind=ambient("res://assets/audio/wind.wav",-19)
 	fire=ambient("res://assets/audio/fire.wav",-80)
-	background=ambient("res://assets/audio/winter_ambient.wav",-32)
+	background=ambient("res://assets/audio/winter_ambient.wav",-60)
 	for i in range(4):
 		var voice:=AudioStreamPlayer.new();voice.volume_db=-16;add_child(voice);step_voices.append(voice)
 	footstep=step_voices[0]
@@ -78,7 +80,8 @@ func sync(state,paused:bool,outside:=true,speed:=0.0,burning:=false,simulating:=
 			breathing.pitch_scale=lerpf(.90,1.06,breathing_effort);breathing.play()
 			breath_wait=lerpf(6.3,2.9,breathing_effort);breath_pulse.emit(breathing_effort);breaths_played+=1
 	var desired:String=state.music_effect()
-	var background_target:float=-49.0 if not desired.is_empty() else (-32.0 if outside else -30.0)
+	if not paused:cue_seconds=maxf(0,cue_seconds-delta)
+	var background_target:float=-65.0 if not desired.is_empty() or cue_seconds<=0 else (-35.0 if outside else -32.0)
 	if reading:background_target-=5.0
 	background.volume_db=lerpf(background.volume_db,background_target,minf(delta*.8,1))
 	var switching:=not desired.is_empty() and desired!=current_tape and speaker.playing
@@ -95,6 +98,7 @@ func sync(state,paused:bool,outside:=true,speed:=0.0,burning:=false,simulating:=
 	speaker.stream_paused=paused
 
 func shutdown()->void:
+	shutdown_requested.emit()
 	current_tape=""
 	for node in [speaker,wind,fire,footstep,breathing,background]:
 		if is_instance_valid(node):node.stream_paused=false;node.stop();node.stream=null

@@ -8,6 +8,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "chapter_polish": (["--fixed-fps", "60", "--quit-after", "1800", "tools/chapter_polish_check.tscn", "--", "--isolated-settings"], "CHAPTER_POLISH_OK"),
+    "tripo_asset": (["--script", "res://tools/tripo_asset_check.gd"], "TRIPO_ASSET_OK"),
+    "wildlife_motion": (["--fixed-fps", "60", "--quit-after", "4200", "tools/wildlife_motion_check.tscn", "--", "--isolated-settings"], "WILDLIFE_MOTION_OK"),
     "aim": (["--fixed-fps", "60", "--quit-after", "1800", "tools/aim_check.tscn", "--", "--isolated-settings"], "AIM_OK"),
     "hunting": (["--fixed-fps", "60", "--quit-after", "1800", "tools/hunting_check.tscn", "--", "--isolated-settings"], "HUNTING_OK"),
     "field": (["--fixed-fps", "60", "--quit-after", "1800", "tools/field_check.tscn", "--", "--isolated-settings"], "FIELD_OK"),
@@ -46,6 +49,10 @@ def main():
     tasks = [("import", (["--editor", "--import", "--quit"], None))]
     tasks += list(CHECKS.items()) if args.suite == "all" else [(args.suite, CHECKS[args.suite])]
     for name, (extra, marker) in tasks:
+        extra = list(extra)
+        if name != "import" and "--script" not in extra and "--isolated-settings" not in extra:
+            if "--" not in extra: extra.append("--")
+            extra.append("--isolated-settings")
         command = [binary, "--headless", "--path", str(ROOT), *extra]
         try:
             result = subprocess.run(command, cwd=ROOT, capture_output=True, timeout=180)

@@ -41,7 +41,8 @@ func chapter(title: String) -> void:
 	print("DEMO_CHAPTER ", JSON.stringify(record))
 	write_report("running")
 	if DisplayServer.get_name() != "headless" and not OS.get_cmdline_user_args().has("--recording"):
-		await RenderingServer.frame_post_draw
+		await get_tree().process_frame
+		RenderingServer.force_draw(false);await get_tree().process_frame
 		get_viewport().get_texture().get_image().save_png(demo_output+"/chapter-%02d.png" % demo_events.size())
 
 func write_report(status: String) -> void:

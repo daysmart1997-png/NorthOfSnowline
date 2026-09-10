@@ -1,4 +1,5 @@
 extends "res://scripts/player.gd"
+const MODEL = preload("res://assets/characters/ranger_tripo_motion_v2.glb")
 signal footfall(surface:String,pressure:float,left:bool)
 var animation:AnimationPlayer
 var animation_names:Dictionary={}
@@ -19,7 +20,7 @@ func _ready()->void:
 	for node in visual.get_children():visual.remove_child(node);node.queue_free()
 	legs.clear();arms.clear()
 	visual.name="RangerVisual"
-	var ranger:Node3D=load("res://assets/characters/ranger_equipment.glb").instantiate()
+	var ranger:Node3D=MODEL.instantiate()
 	visual.add_child(ranger)
 	skeleton=ranger.find_children("*","Skeleton3D",true,false)[0]
 	feet_modifier=preload("res://scripts/grounded_feet.gd").new()

@@ -58,6 +58,7 @@ const RECIPES := {
 var temperature := 88.0
 var stamina := 100.0
 var health := 100.0
+var weather_profile:=1
 var hunger := 35.0
 var thirst := 30.0
 var energy := 90.0
@@ -94,6 +95,9 @@ func weight() -> float:
 	return total
 
 func storm() -> float:
+	if weather_profile==1 and elapsed<1200.0:
+		# First departure: a readable calm window, peak after dusk has begun.
+		return smoothstep(240.0,720.0,elapsed)*(1.0-smoothstep(900.0,1200.0,elapsed))
 	var phase := fmod(elapsed, 1200.0)
 	return clampf((phase - 90.0) / 360.0, 0.0, 1.0) * (1.0 - clampf((phase - 850.0) / 300.0, 0.0, 1.0))
 
@@ -300,9 +304,11 @@ func repair() -> bool:
 	return true
 
 func data() -> Dictionary:
-	return {"schema":5,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
+	return {"schema":6,"weather_profile":weather_profile,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
 
 func restore(d: Dictionary) -> bool:
+	var weather:Variant=d.get("weather_profile",0)
+	if not (weather is int or weather is float) or (float(weather)!=0.0 and float(weather)!=1.0):return false
 	if d.has("field_kit") and not Kit.valid(d.field_kit):return false
 	# Validate every chapter field before assigning; legacy saves keep their completed ending.
 	if d.has("chapter"):
@@ -344,6 +350,7 @@ func restore(d: Dictionary) -> bool:
 	var tape = d.get("loaded_tape","")
 	if not tape is String or (not tape.is_empty() and not tape in ["tape_embers","tape_stride","tape_home"]): return false
 	if not d.get("music_playing",false) is bool: return false
+	weather_profile=int(weather)
 	kit=Kit.new()
 	if d.has("field_kit"):kit.restore(d.field_kit)
 	for key in ["temperature","stamina","health","hunger","thirst","energy","battery_charge"]: set(key,clampf(float(d.get(key,get(key))),0,100))

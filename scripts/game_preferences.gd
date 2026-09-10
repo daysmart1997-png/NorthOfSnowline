@@ -6,10 +6,13 @@ var music:=1.0
 var effects:=1.0
 var hud_scale:=1.0
 var compact_hud:=true
+var large_text:=false
 
 func load_preferences()->void:
 	var config:=ConfigFile.new()
 	if config.load(path)!=OK:return
+	var text_size=config.get_value("presentation","large_text",false)
+	if text_size is bool:large_text=text_size
 	var compact=config.get_value("presentation","compact_hud",true)
 	if compact is bool:compact_hud=compact
 	for key in ["master","music","effects","hud_scale"]:
@@ -21,6 +24,7 @@ func save_preferences()->void:
 	var config:=ConfigFile.new()
 	for key in ["master","music","effects","hud_scale"]:config.set_value("presentation",key,get(key))
 	config.set_value("presentation","compact_hud",compact_hud)
+	config.set_value("presentation","large_text",large_text)
 	config.save(path)
 
 func apply_audio()->void:

@@ -17,7 +17,11 @@ var radio_lit:=false
 var opening
 var field
 var interior_view=preload("res://scripts/interior_view.gd").new()
-const SAVE_PATH := "res://savegame.json"
+const Saves=preload("res://scripts/journey_saves.gd")
+const SAVE_PATH := "user://saves/manual.json"
+var checkpoint_button:Button
+var experience
+var automatic_saves:=true
 var save_path := SAVE_PATH
 var survival = Survival.new()
 var player: CharacterBody3D
@@ -67,6 +71,7 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://artifacts"))
 	if OS.get_cmdline_user_args().has("--isolated-settings"):
 		preferences.path="res://artifacts/exploration/test-preferences.cfg"
+		save_path="res://artifacts/isolated/manual.json";automatic_saves=false
 	else:preferences.load_preferences()
 	preferences.apply_audio()
 	setup_input()
@@ -88,6 +93,7 @@ func _ready() -> void:
 	player.footfall.connect(cassette.play_step)
 	cassette.breath_pulse.connect(player.exhale)
 	field=preload("res://scripts/field_expedition.gd").new();add_child(field);field.setup(self)
+	experience=preload("res://scripts/chapter_experience.gd").new();add_child(experience);experience.setup(self)
 	player.collision_mask=5
 	world.sync_buildings(survival)
 	set_menu(true)
@@ -265,7 +271,11 @@ func build_ui()->void:
 	new_button=button("开始新的旅程",func():start_new();opening.begin(),menu_box)
 	resume_button=button("继续探索",func():set_menu(false),menu_box)
 	save_button=button("保存当前进度",save_game,menu_box)
-	load_button=button("读取上次保存",load_game,menu_box)
+	var load_row:=HBoxContainer.new();menu_box.add_child(load_row)
+	load_button=button("读取手动存档",load_game,load_row)
+	checkpoint_button=button("读取安全节点",func():load_game(true),load_row)
+	load_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	checkpoint_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	button("声音与界面",func():show_settings(true),menu_box)
 	button("退出游戏",func():get_tree().quit(),menu_box)
 	var controls:=label("WASD 移动 · Shift 奔跑 · C 蹲行 · E 交互\nB 行囊 · V 制作 · Tab 地图 · M 磁带 · H 隐藏界面",14,Palette.MUTED)
@@ -301,6 +311,8 @@ func build_settings()->void:
 	var compact_toggle:=CheckButton.new();compact_toggle.name="Setting_compact_hud"
 	compact_toggle.text="简洁探索界面（关闭后显示完整信息）";compact_toggle.button_pressed=preferences.compact_hud
 	compact_toggle.toggled.connect(func(value:bool):preferences.compact_hud=value);settings_box.add_child(compact_toggle)
+	var large_toggle:=CheckButton.new();large_toggle.text="大号剧情正文";large_toggle.button_pressed=preferences.large_text
+	large_toggle.toggled.connect(func(value:bool):preferences.large_text=value);settings_box.add_child(large_toggle)
 	button("返回",func():preferences.save_preferences();show_settings(false),settings_box)
 
 func show_settings(show:bool)->void:
@@ -314,6 +326,7 @@ func start_new() -> void:
 	survival.temperature=68;survival.energy=70
 	survival.kit.owned[survival.kit.equipped.feet].wet=35
 	if field!=null:field.reset()
+	if experience!=null:experience.reset()
 	player.position = Vector3(0, world.terrain_height(0,38)+.2, 38)
 	player.velocity = Vector3.ZERO
 	player.pivot.rotation = Vector3(Player.CAMERA_PITCH, Player.CAMERA_YAW, 0)
@@ -340,7 +353,8 @@ func set_menu(show_menu: bool) -> void:
 	resume_button.visible = started and survival.health > 0
 	resume_button.text="继续在林区生存" if survival.completed else "继续探索"
 	save_button.visible = resume_button.visible
-	load_button.disabled = not FileAccess.file_exists(save_path)
+	load_button.disabled = not FileAccess.file_exists(Saves.manual_source(save_path))
+	checkpoint_button.disabled=not FileAccess.file_exists(Saves.checkpoint_path(save_path))
 	new_button.text = "重新开始旅程" if started else "开始新的旅程"
 	new_button.get_parent().move_child(new_button,7 if started else 4)
 	if show_menu:
@@ -489,6 +503,8 @@ func open_story(kind:String)->void:
 	story_panel.show_scene(kind)
 
 func close_story()->void:
+	if story_panel.scene_kind=="radio" and survival.completed:
+		cassette.cue_seconds=0
 	story_panel.visible=false
 	active=not menu.visible and not backpack.visible and started and survival.health>0
 	player.enabled=active
@@ -534,20 +550,25 @@ func notify(message: String) -> void:
 	toast.text = message
 	toast_time = 4.0
 
-func save_game() -> void:
-	var data := {"version": 2, "state": survival.data(), "position": [player.position.x, player.position.y, player.position.z], "yaw": player.pivot.rotation.y}
-	var file := FileAccess.open(save_path + ".tmp", FileAccess.WRITE)
-	if file == null:
-		menu_info.text = "保存失败：无法写入项目文件夹。"
-		return
-	file.store_string(JSON.stringify(data))
-	file.close()
-	var err := DirAccess.rename_absolute(ProjectSettings.globalize_path(save_path + ".tmp"), ProjectSettings.globalize_path(save_path))
-	menu_info.text = "进度已保存。\n可继续探索，或下次读取保存。" if err == OK else "保存失败，请检查文件是否被占用。"
-	load_button.disabled = not FileAccess.file_exists(save_path)
+func journey_snapshot()->Dictionary:
+	return {"version":2,"state":survival.data(),"position":[player.position.x,player.position.y,player.position.z],"yaw":player.pivot.rotation.y}
 
-func load_game() -> void:
-	var file := FileAccess.open(save_path, FileAccess.READ)
+func save_game() -> void:
+	var result:Error=Saves.write(save_path,journey_snapshot())
+	menu_info.text="进度已保存。可随时读取手动存档。" if result==OK else "保存失败，上次存档已保留。请检查存储空间。"
+	load_button.disabled=not FileAccess.file_exists(Saves.manual_source(save_path))
+
+func save_checkpoint()->bool:
+	if not automatic_saves:return false
+	var result:Error=Saves.write(Saves.checkpoint_path(save_path),journey_snapshot())
+	checkpoint_button.disabled=not FileAccess.file_exists(Saves.checkpoint_path(save_path))
+	if result==OK:notify("安全节点已保存 · 手动存档保留")
+	else:notify("安全节点保存失败 · 请在暂停菜单手动保存")
+	return result==OK
+
+func load_game(from_checkpoint:=false) -> void:
+	var source:String=Saves.checkpoint_path(save_path) if from_checkpoint else Saves.manual_source(save_path)
+	var file := FileAccess.open(source, FileAccess.READ)
 	if file == null:
 		menu_info.text = "没有找到可读取的存档。"
 		return
@@ -562,14 +583,15 @@ func load_game() -> void:
 		menu_info.text = "存档格式不兼容，未改变当前进度。"
 		return
 	for value in p:
-		if not (value is float or value is int):
+		if not (value is float or value is int) or not is_finite(float(value)):
 			menu_info.text = "存档位置无效。"
 			return
-	if not (data.get("yaw") is float or data.get("yaw") is int) or not candidate.restore(data.state):
+	if not (data.get("yaw") is float or data.get("yaw") is int) or not is_finite(float(data.yaw)) or not candidate.restore(data.state):
 		menu_info.text = "存档数据无效，未改变当前进度。"
 		return
 	survival = candidate
 	if field!=null:field.reset()
+	if experience!=null:experience.reset()
 	backpack.visible=false
 	story_panel.visible=false
 	world.sync_buildings(survival)

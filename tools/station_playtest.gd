@@ -9,13 +9,22 @@ func _ready()->void:
 func play_session()->void:
 	await chapter("风雪将至")
 	await observe(2)
-	new_button.pressed.emit();await observe(2)
+	new_button.pressed.emit();await observe(2);opening.finish();await observe(1)
+	if not await walk_to(Vector2(0,27)):return
+	if not await walk_to(Vector2(0,20.5)):return
 	if not await walk_to(Vector2(-2.4,18.2)):return
 	if not await use_target("radio"):return
 	await chapter("值守簿 · 没能发出的平安报")
 	if not await story_click("leave"):return
-	if not await walk_to(Vector2(0,27)):return
-	if not await walk_to(Vector2(5.3,25)):return
+	for at in [Vector2(0,20),Vector2(0,17),Vector2(0,14.8),Vector2(1.1,14.8)]:
+		if not await walk_to(at):return
+	if not await use_target("field_medical"):return
+	backpack.tab="items";toggle_backpack();await observe(1)
+	if not await press_button_with("\n\n饮用水"):return
+	if not await press_button_with("使用一份"):return
+	await close_inventory()
+	for at in [Vector2(0,14.8),Vector2(0,20),Vector2(0,27),Vector2(5.3,25)]:
+		if not await walk_to(at):return
 	if not await use_target("home_supplies"):return
 	await chapter("准备出发 · 门外薄雪与修缮物资")
 	for at in [Vector2(0,27),Vector2(-6,27),Vector2(-6,8),Vector2(0,8),Vector2(0,-14),Vector2(4,-15)]:
@@ -38,6 +47,9 @@ func play_session()->void:
 	await chapter("北侧应急箱 · 为返程补水")
 	for at in [Vector2(0,-160),Vector2(0,-167),Vector2(-2.4,-169.8)]:
 		if not await walk_to(at):return
+	for i in range(3):
+		if not await use_target("radio_parts"):return
+		await observe(3)
 	if not await use_target("radio_parts"):return
 	await chapter("维修交接 · 留给后来的人")
 	if not await story_click("ridge" if OS.get_cmdline_user_args().has("--ridge-detour") else "direct"):return
@@ -57,7 +69,7 @@ func play_session()->void:
 	await chapter("炉火旁 · 预估消耗后休息一小时")
 	if not await press_button_with("休息 1 小时"):return
 	await observe(3);await close_inventory()
-	for at in [Vector2(0,-168),Vector2(0,-160),Vector2(0,-140),Vector2(0,-100)]:
+	for at in [Vector2(-.2,-170),Vector2(-.2,-168),Vector2(0,-160),Vector2(0,-140),Vector2(0,-100)]:
 		if not await walk_to(at):return
 	await chapter("沿铁路返程 · 迎风更冷，路线更直接")
 	if not await walk_to(Vector2(0,-74)):return
@@ -90,3 +102,12 @@ func story_click(id:String)->bool:
 		fail_session("Missing story choice: "+id);return false
 	await click_control(control);await observe(1.5)
 	return true
+
+func walk_to(at:Vector2,run:=false)->bool:
+	var reached:bool=await super.walk_to(at,run)
+	if reached and survival.kit.has_condition("wound") and survival.count("bandage")>0:
+		backpack.tab="items";toggle_backpack();await observe(1)
+		if not await press_button_with("\n\n绷带"):return false
+		if not await press_button_with("使用一份"):return false
+		await close_inventory()
+	return reached
