@@ -9,6 +9,25 @@ func check_ranger()->void:
 	start_new();active=false;player.enabled=false;player.feet_modifier.active=false
 	for i in range(6):await get_tree().process_frame
 	assert(player.animation_names.size()==8,"All interaction and locomotion clips survive the refined export")
+	assert(player.animation.get_animation(player.animation_names.Idle).length>17,"Keep the supplied relaxed standing sequence")
+	for clip in ["Idle","Walk","Run"]:
+		var anim:Animation=player.animation.get_animation(player.animation_names[clip])
+		player.animation.play(player.animation_names[clip],0)
+		for i in range(33):
+			player.animation.seek(anim.length*i/32.0,true)
+			var hip:Vector3=player.skeleton.get_bone_global_pose(player.skeleton.find_bone("hips")).origin
+			assert(Vector2(hip.x,hip.z).length()<.36,"Root travel cannot move the visual out of its collision body: "+clip)
+	for clip in ["Pickup","Interact","Consume"]:
+		var anim:Animation=player.animation.get_animation(player.animation_names[clip])
+		player.animation.play(player.animation_names[clip],0);player.animation.seek(0,true)
+		var rest_hip:Vector3=player.skeleton.get_bone_global_pose(player.skeleton.find_bone("hips")).origin
+		player.animation.seek(anim.length*.5,true)
+		var hand:Vector3=player.skeleton.get_bone_global_pose(player.skeleton.find_bone("L_Hand")).origin
+		var head:Vector3=player.skeleton.get_bone_global_pose(player.skeleton.find_bone("head")).origin
+		var hip:Vector3=player.skeleton.get_bone_global_pose(player.skeleton.find_bone("hips")).origin
+		if clip=="Consume":assert(hand.distance_to(head)<.3,"Eating reaches the new face")
+		if clip=="Pickup":assert(hip.y<rest_hip.y-.2 and hand.y<.7,"Pickup bends and reaches down")
+		if clip=="Interact":assert(hand.z<-.2 and hand.y>.9,"Interaction reaches a work surface")
 	# Inspect the imported asset, not the Blender generator's intermediate data.
 	for clip in ["Walk","Run","CrouchWalk"]:
 		var name:String=player.animation_names[clip]
@@ -19,9 +38,15 @@ func check_ranger()->void:
 			player.animation.seek(length*i/80.0,true)
 			left.append(player.skeleton.get_bone_global_pose(player.skeleton.find_bone("foot.L")).origin)
 			right.append(player.skeleton.get_bone_global_pose(player.skeleton.find_bone("foot.R")).origin)
-		for i in range(80):
-			var mirrored:Vector3=right[(i+40)%80];mirrored.x=-mirrored.x
-			assert(left[i].distance_to(mirrored)<.018,"Left/right half-cycle symmetry: %s frame %d left %s mirrored %s length %f"%[clip,i,left[i],mirrored,length])
+		# Supplied motion is naturally asymmetric. Check functional contacts and
+		# loop continuity, rather than forcing the old generated mirror poses.
+		for foot in [left,right]:
+			var low:=100.0;var high:=-100.0
+			for at in foot:low=minf(low,at.y);high=maxf(high,at.y)
+			assert(high-low>.045 and high-low<.65,"Each supplied foot lifts and lands: "+clip)
+			assert(foot[0].distance_to(foot[-1])<.15,"No discontinuous foot reset: "+clip)
+		print("GAIT_PHASE ",clip," ",left[0]," ",left[40]," ",right[0]," ",right[40])
+		assert(left[0].z<right[0].z and right[40].z<left[40].z,"Advancing foot matches alternating footstep events: "+clip)
 	# Real movement through walk/run/crouch and stop/restart. A mid-cycle sprint
 	# used to restart the left foot and break alternation even on flat ground.
 	player.feet_modifier.active=true;player.enabled=true;active=true
@@ -61,5 +86,5 @@ func check_ranger()->void:
 	print("RANGER_CONTACTS ",JSON.stringify(contacts))
 	active=false;player.enabled=false;set_process(false);cassette.shutdown();story_panel.shutdown_audio();backpack.shutdown_ui()
 	await get_tree().process_frame;await get_tree().process_frame;OS.delay_msec(100)
-	print("RANGER_CHECK_OK: eight clips, imported bilateral gait symmetry, real walk/run/crouch and restart contacts, bounded cadence, snow impressions and terrain fitting")
+	print("RANGER_CHECK_OK: eight clips, supplied gait lift/contact/loop continuity, real walk/run/crouch and restart contacts, bounded cadence, snow impressions and terrain fitting")
 	get_tree().quit()

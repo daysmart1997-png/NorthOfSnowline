@@ -36,7 +36,7 @@ func check_asset()->void:
   if atlas==null:atlas=material.albedo_texture
   assert(material.albedo_texture==atlas and atlas.get_width()==2048)
   surfaces[material.resource_name]=i
- assert(triangles==10783,"No accidental subdivision, dropped faces or custom shape export")
+ assert(triangles==11000,"All 11000 supplied faces survive without subdivision or custom shape export")
  var kit=Kit.new();Sheet.apply_clothes(model,kit)
  await process_frame;await process_frame
  for slot in Kit.SLOTS:
@@ -69,5 +69,5 @@ func check_asset()->void:
   materials.append(mesh.get_surface_override_material(i))
  model.free();await process_frame;await process_frame
  materials.clear()
- print("TRIPO_ASSET_OK: normalized 41-bone skin, 10783 triangles, metre scale, shared 2K UV atlas, six clothing slots, wetness and immutable source materials, eight clips")
+ print("TRIPO_ASSET_OK: normalized 41-bone skin, 11000 supplied triangles, metre scale, shared 2K UV atlas, six clothing slots, wetness and immutable source materials, eight clips")
  quit()

@@ -1,5 +1,7 @@
 extends "res://scripts/player.gd"
-const MODEL = preload("res://assets/characters/ranger_tripo_motion_v2.glb")
+const MODEL = preload("res://assets/characters/ranger_supplied_v3.glb")
+# Measured travel per second in the supplied clips, after metre conversion.
+const AUTHORED_SPEED={"Walk":1.2687091312,"Run":4.6237804848}
 signal footfall(surface:String,pressure:float,left:bool)
 var animation:AnimationPlayer
 var animation_names:Dictionary={}
@@ -52,7 +54,7 @@ func exhale(effort:float)->void:
 
 func play_action(clip:String)->void:
 	if animation==null or not animation_names.has(clip):return
-	action_time=minf(animation.get_animation(animation_names[clip]).length,1.0)
+	action_time=animation.get_animation(animation_names[clip]).length/1.25
 	last_clip=clip;animation.get_animation(animation_names[clip]).loop_mode=Animation.LOOP_NONE;animation.play(animation_names[clip],.16);animation.speed_scale=1.25
 
 func _physics_process(delta:float)->void:
@@ -85,6 +87,7 @@ func _physics_process(delta:float)->void:
 	var cycle_seconds:=.60 if clip=="Run" else (1.25 if clip=="CrouchWalk" else .80)
 	var base_speed:=3.8 if clip=="Run" else (.85 if clip=="CrouchWalk" else 1.65)
 	animation.speed_scale=1.0 if speed<.12 else anim.length/cycle_seconds*clampf(speed/base_speed,.08,1.3)
+	if AUTHORED_SPEED.has(clip):animation.speed_scale=clampf(speed/float(AUTHORED_SPEED[clip]),.08,1.6)
 	if speed>.2 and is_on_floor():
 		var half:=int(fmod(animation.current_animation_position/maxf(anim.length,.001),1.0)*2)
 		if half!=gait_half and position.distance_to(last_contact)>.18:
@@ -121,4 +124,4 @@ func clear_footprints()->void:
 	if is_instance_valid(snow_world):snow_world.clear_tracks()
 	last_contact=position;gait_half=-1
 	ground_samples.clear()
-	if is_instance_valid(feet_modifier):feet_modifier.corrections.clear();feet_modifier.contact_normals.clear()
+	if is_instance_valid(feet_modifier):feet_modifier.corrections.clear();feet_modifier.contact_normals.clear();feet_modifier.authored_rotations.clear()

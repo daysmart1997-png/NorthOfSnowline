@@ -1,7 +1,37 @@
 # 当前进度 · 跨设备接续入口
 
-更新时间：2026-09-10。main 跟踪 origin/main。本次 GitHub 交接基于 Windows 的 7f670d4，包含 Tripo 主角接入、小鹿动作修复、主角参考素材、第一章优化与后续里程碑；用户已明确授权提交并推送。顶部为接续入口，下方各轮“未提交/未推送”描述属于当时的历史状态。
+更新时间：2026-09-10。main 跟踪 origin/main，本轮以 Mac 提交 `7139571` 为基线。Windows 已接入用户新提供的带动作主角，并完成体验视频录制；用户现已授权将模型、源码、录制工具与文档纳入本次 GitHub 交接提交。顶部为接续入口。
 
+## Windows → GitHub 交接（2026-09-10）
+
+- 本次包含用户原始 GLB、可编辑 Blender 源、新主角运行模型/贴图、八段动画适配、检查与制作工具，以及体验录制入口和导出说明；二进制资产通过 Git LFS 同步。视频成片、录制原件、依赖、备份和玩家存档仍仅留本机。
+- 推送前拉取远程引用，确认与 `7139571` 无分歧；沿用本轮已经完成的十九组 Windows 检查、角色/地形原生复验和完整体验路线验收。本次不再修改玩法或重建资产，另审核暂存快照、常见凭据模式与 LFS 完整性。
+- Mac 接续：在项目目录确认本地修改已保存后，执行 `git pull --ff-only`、`git lfs pull`，用 Godot 4.7.2 导入。请独立确认新角色步态、人物页和足部贴坡；本次 Windows 通过不代表 Mac 已复验。录制视频可在 Windows 的 artifacts 中查看，Git 克隆只带录制工具与说明。
+
+## 体验视频与昼夜光影（2026-09-10，已录制）
+
+- 用户本轮明确要求录制，并补充展示日夜光影和音乐。新增独立 `tools/experience_demo.tscn`：真实移动/碰撞、正式 UI 回调和生存规则，展示开场、新人物、木屋、补给、雪地奔跑、地图、磁带机与《余烬》、修床生火及正常休息。正式游戏入口和玩家存档不改；运行带 `--isolated-settings`。
+- Windows / RTX 3070 Ti / Godot 4.7.2 原生 MovieWriter 完成 10,071 帧，335.70 秒，1280×720 / 30 FPS。最后 50 秒明确标注“昼夜光影 · 延时展示”，只改变展示太阳时间和轻雪，暂停生存，不伪装成实际时间流速或实时性能测试。
+- 本地成片：`artifacts/experience-demo-2026-09-10/north-of-snowline-demo.mp4`（约 91.69 MiB）；单独 50 秒光影/音乐片段 `day-night-music.mp4`（约 11.37 MiB）。H.264 / AAC 48 kHz 立体声，含原生音效与磁带，无麦克风。仅整体增益 +12 dB，最终全片平均 -25.5 dB、峰值 -4.5 dB，未削波；不改变游戏声音设置。
+- 最终原生路线报告 complete，录制日志无 ERROR/WARNING；完整片和短片均通过完整解码，全片无超过 20 秒的冻结画面。已查看实际人物页、雪地、夜晚暖窗和晨光帧。初次预演有退出资源警告；两次失败录制分别遇到旧 Mac 强制绘制不兼容和原生合成鼠标漏点，已保留证据并在录制专用入口修正；失败片不交付。
+- 导出工具增加可选标题/恒定增益，并修正 Windows 读取 UTF-8 报告与冻结日志的编码问题。录制方案见 [28_EXPERIENCE_DEMO_RECORDING.md](28_EXPERIENCE_DEMO_RECORDING.md)。视频、原始 AVI、失败证据和 FFmpeg 依赖全部在忽略的 artifacts 内，不提交、不上传；Mac 未复验这一录制入口。下一步由用户观看确认展示节奏和音画感受。
+
+## 用户自带动作主角 v3（2026-09-10，已接入）
+
+- 按用户要求采用 `tripo_convert_97352c66-5e8a-44b8-9646-f187011f4bea.glb`。11,000 三角面、41 骨骼、8K 源图集、自带放松站立/行走/跑步；原文件逐字节保存在 `source_art/tripo_supplied_v3/original.glb`，旧版源与导出不覆盖。新可编辑源 ranger.blend、运行 ranger_supplied_v3.glb 与 2K 图集同步准备。
+- 保留自带三段姿态，统一 1.88 m / 朝向 / 兼容骨骼名，不重新定位原骨骼或替换蒙皮权重；走跑去掉重复线性位移、取完整周期、对齐落脚并做短接缝过渡。播放倍率依据原动作实际步幅，Idle 保留约 17.58 秒。
+- 蹲伏/蹲行按新腿长与踝高适配；拾取/操作/饮食以新 Idle 为基础，增加屈膝俯身、双手到台面、手到嘴边的目标姿态，共八段动作。修正动作持续时间，避免一秒上限提前截断。人物页复用新模型，服装染色、湿度和身体状态保留。
+- Windows / Godot 4.7.2：首轮整套十九组中十八组 PASS；旧 frontier 将自带动作的自然蹬地角度误当成静态脚掌翻转，改为约束坡面 IK 相对当前原动画的修正后，frontier 补验 PASS。累计十九组通过；日志 `artifacts/supplied-full-checks.log`、`supplied-frontier-check.log`。资产/真实移动/手到达目标的专项也已通过。
+- RTX 3070 Ti / Compatibility：1280×720 原生 ranger、field、frontier 检查，以及八段动作分相预览通过；走/跑/蹲与停走实测 13 次交替落脚。已查看新模型正背面、跑步、蹲行、拾取、操作、饮食和人物页；预览 `artifacts/ranger-finish/supplied-v3`、`artifacts/supplied-v3-field`。没有录屏、改玩家存档或外部上传；Mac 尚未独立复验此模型。
+- 详见 [27_SUPPLIED_RANGER_MOTION.md](27_SUPPLIED_RANGER_MOTION.md) 与新源目录 README。手部目标目前按角色体型适配，未加入任意物体位置的动态手部 IK；此轮没有新增拉弓/持枪专用骨骼动作。下一步优先真人体验动作手感与多种桌面/物资高度的交互接物。
+
+
+## Windows 拉取与独立复验（2026-09-10）
+
+- 按用户要求从 GitHub 同步 Mac 进度，Windows main 从 `7f670d4` 快进到 `7139571`，同步前本地无修改，无合并冲突；LFS 素材已完整拉取，`git lfs fsck` 通过。
+- Windows / Godot 4.7.2 / RTX 3070 Ti / Compatibility：导入及全部十九组检查 PASS，汇总日志 `artifacts/mac-sync-windows-checks.log`。首次导入进程异常退出但未记录脚本错误，原日志保留为 `artifacts/mac-sync-first-import.log`；复验导入及整套检查通过，没有修改游戏代码。
+- 1280×720 原生 `chapter_polish` 与 `ranger` 均 PASS；已查看维修完成示意、大字磁带便笺、双槽保存菜单、Tripo 主角实走画面。走/跑/蹲与停走切换产生 15 次交替落脚，未出现脚本错误或泄漏。原生日志 `artifacts/mac-sync-native-chapter.log`、`artifacts/mac-sync-native-ranger.log`。
+- 本轮仅拉取与验证，未重建素材、未改游戏内容、未写玩家存档、未录屏；此验收记录为本地文档补充，未创建新提交或推送。主观动作与混音、首次玩家反馈仍按后续里程碑继续。
 
 ## GitHub 跨设备交接（2026-09-10）
 

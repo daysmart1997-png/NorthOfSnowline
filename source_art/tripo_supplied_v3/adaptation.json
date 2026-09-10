@@ -1,0 +1,77 @@
+{
+  "source_sha256": "5c6197b9fd67d5f686780d15090606a3c22f8827118e2891103d5a10d6347a9a",
+  "height": 1.88,
+  "atlas_source": [
+    8192,
+    8192
+  ],
+  "atlas_runtime": [
+    2048,
+    2048
+  ],
+  "surfaces": {
+    "detail": 1662,
+    "head": 854,
+    "torso": 2499,
+    "hands": 1111,
+    "legs": 1132,
+    "feet": 2126,
+    "pack": 1616
+  },
+  "clips": {
+    "Run": {
+      "source": "preset:biped:run.001",
+      "source_duration": 1.25,
+      "frames": 16,
+      "duration": 0.625,
+      "phase_start_frame": 13,
+      "reference_speed": 4.62378048475864,
+      "seam_frames": 1
+    },
+    "Idle": {
+      "source": "preset:biped:standing_relax.001",
+      "source_duration": 17.583333333333332,
+      "frames": 423,
+      "duration": 17.583333333333332,
+      "phase_start_frame": 0,
+      "reference_speed": 0,
+      "seam_frames": 4
+    },
+    "Walk": {
+      "source": "preset:biped:walk.001",
+      "source_duration": 2.3333333333333335,
+      "frames": 29,
+      "duration": 1.1666666666666667,
+      "phase_start_frame": 3,
+      "reference_speed": 1.2687091311740306,
+      "seam_frames": 3
+    },
+    "CrouchIdle": {
+      "source": "local motion_v2 retarget",
+      "frames": 89,
+      "duration": 3.6666666666666665
+    },
+    "CrouchWalk": {
+      "source": "local motion_v2 retarget",
+      "frames": 62,
+      "duration": 2.5416666666666665
+    },
+    "Pickup": {
+      "source": "supplied idle with authored reach targets",
+      "frames": 27,
+      "duration": 1.0833333333333333
+    },
+    "Interact": {
+      "source": "supplied idle with authored reach targets",
+      "frames": 61,
+      "duration": 2.5
+    },
+    "Consume": {
+      "source": "supplied idle with authored reach targets",
+      "frames": 33,
+      "duration": 1.3333333333333333
+    }
+  },
+  "bones": 41,
+  "triangles": 11000
+}

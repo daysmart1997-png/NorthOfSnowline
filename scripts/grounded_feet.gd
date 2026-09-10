@@ -3,6 +3,7 @@ var player:CharacterBody3D
 var terrain:Node3D
 var corrections:Dictionary={}
 var contact_normals:Dictionary={}
+var authored_rotations:Dictionary={}
 var adjustments:=0
 
 func _process_modification()->void:
@@ -14,6 +15,7 @@ func _process_modification()->void:
 		var hip:=skel.find_bone("thigh."+side);var knee:=skel.find_bone("shin."+side);var foot:=skel.find_bone("foot."+side)
 		if mini(hip,mini(knee,foot))<0:continue
 		var h:=skel.get_bone_global_pose(hip);var k:=skel.get_bone_global_pose(knee);var f:=skel.get_bone_global_pose(foot)
+		authored_rotations[side]=f.basis.get_rotation_quaternion()
 		var sample:Dictionary=player.ground_samples.get(side,{})
 		if sample.is_empty():continue
 		var shift:float=clampf(float(sample.height)-player.global_position.y,-.22,.22)

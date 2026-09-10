@@ -671,8 +671,11 @@ func frontier_check()->void:
 			for side in ["L","R"]:
 				var foot:int=player.skeleton.find_bone("foot."+side)
 				var actual:Quaternion=player.skeleton.get_bone_global_pose(foot).basis.get_rotation_quaternion()
-				var rest:Quaternion=player.skeleton.get_bone_global_rest(foot).basis.get_rotation_quaternion()
-				assert(absf(actual.dot(rest))>.90,"Boot must not tip upright or twist through the gait")
+				# Supplied gait includes toe-off roll; bound the terrain correction
+				# against its animated input instead of the static bind-pose ankle.
+				assert(player.feet_modifier.authored_rotations.has(side),"Compare a real pre-IK pose")
+				var authored:Quaternion=player.feet_modifier.authored_rotations[side]
+				assert(absf(actual.dot(authored))>.90,"Terrain fitting must preserve authored boot motion")
 	Input.action_release("move_up")
 	assert(player.feet_modifier.adjustments>80,"Skeleton modifier is adjusting feet on real slope contacts")
 	assert(player.ground_samples.size()==2 and player.is_on_floor(),"Both foot rays reach the terrain")
