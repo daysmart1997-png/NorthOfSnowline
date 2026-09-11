@@ -23,7 +23,8 @@ func setup(main)->void:
  var readout=preload("res://scripts/module_readout.gd").new();readout.name="ModuleReadout";readout.game=game;readout.mouse_filter=Control.MOUSE_FILTER_IGNORE;game.canvas.add_child(readout)
  cue=AudioStreamPlayer.new();cue.bus="SnowEffects";cue.volume_db=-19;add_child(cue)
  module_root=Node3D.new();module_root.name="ModuleFeedback";game.world.add_child(module_root)
- module_root.position=Vector3(-2.45,1.14,-171.0)
+ var surface:Node3D=game.world.buildings.station.find_child("ModuleSurface",true,false)
+ module_root.global_position=surface.global_position
  contact=piece(Vector3(-.15,0,0),Vector3(.18,.018,.11),"80775f")
  cable=piece(Vector3(.08,.01,.01),Vector3(.24,.018,.024),"76614b")
  piece(Vector3(.0,.02,-.16),Vector3(.26,.02,.16),"c3c3ac")
@@ -39,7 +40,7 @@ func piece(at:Vector3,size:Vector3,color:String,parent:Node3D=null)->MeshInstanc
 func reset()->void:
  last_room="";calm_time=0;advice_wait=4;last_stage=-1;milestone_events.clear()
  if cue!=null:cue.stop()
- if game.cassette!=null:game.cassette.cue_seconds=12
+ if game.cassette!=null:game.cassette.cue_seconds=12;game.cassette.alert_seconds=0
 
 func sound(id:String)->void:
  cue.stream=load("res://assets/audio/chapter/"+id+".wav");cue.play()

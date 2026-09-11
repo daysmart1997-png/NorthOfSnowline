@@ -214,6 +214,7 @@ func animal_sound(kind:String,at:Vector3=Vector3.INF)->void:
   bytes.encode_s16(i*2,int(value*envelope*6500))
  wav.data=bytes
  if at.is_finite():
+  if kind in ["wolf","bear"] and at.distance_to(game.player.position)<32:game.cassette.alert_seconds=3.0
   var voice:=AudioStreamPlayer3D.new();voice.bus="SnowEffects";voice.volume_db=-11;voice.max_distance=32;voice.unit_size=7
   add_child(voice);voice.global_position=at+Vector3.UP;voice.stream=wav;voice.finished.connect(voice.queue_free);voice.play()
  else:audio.stream=wav;audio.play()

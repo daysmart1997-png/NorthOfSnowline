@@ -8,6 +8,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "chapter_flow": (["--fixed-fps", "60", "--quit-after", "9000", "tools/chapter_flow_check.tscn", "--", "--isolated-settings"], "CHAPTER_FLOW_OK"),
+    "building": (["--fixed-fps", "60", "--quit-after", "12000", "tools/building_check.tscn", "--", "--isolated-settings"], "BUILDING_CHECK_OK"),
     "chapter_polish": (["--fixed-fps", "60", "--quit-after", "1800", "tools/chapter_polish_check.tscn", "--", "--isolated-settings"], "CHAPTER_POLISH_OK"),
     "tripo_asset": (["--script", "res://tools/tripo_asset_check.gd"], "TRIPO_ASSET_OK"),
     "wildlife_motion": (["--fixed-fps", "60", "--quit-after", "4200", "tools/wildlife_motion_check.tscn", "--", "--isolated-settings"], "WILDLIFE_MOTION_OK"),

@@ -41,10 +41,11 @@ func build(w)->void:
 	world.box(Vector3(-2.05,1.11,17.3),Vector3(.30,.04,.36),"645e4e",false,home_page)
 	paper(home_page,Vector3(-2.05,1.138,17.3),false)
 	var dispatch:=Node3D.new();dispatch.name="StationDispatch";add_child(dispatch)
-	paper(dispatch,Vector3(-2.45,1.302,-170.70),false)
 	# Keep the paper attached to the module container; pickup removes both.
 	for point in world.points:
-		if point.id=="radio_parts":dispatch.reparent(point.node,true)
+		if point.id=="radio_parts":
+			paper(dispatch,point.node.global_position+Vector3(0,.112,0),false)
+			dispatch.reparent(point.node,true)
 	clue("sled_note",sled.position+Vector3(0,.5,.5),"断绳与雪橇","断绳朝西岭拖去。箱子没在这里；坡上露着一截旧帆布。风很硬，绕过去前先摸摸水壶。")
 	var camp_note:=anchor(Vector2(20,-57),"FoldedCampNote")
 	world.box(Vector3(0,.15,0),Vector3(.65,.30,.50),"534c42",false,camp_note)

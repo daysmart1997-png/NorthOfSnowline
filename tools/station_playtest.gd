@@ -4,6 +4,8 @@ func _ready()->void:
 	demo_output="res://artifacts/exploration/station-cold-control" if OS.get_cmdline_user_args().has("--skip-warmth") else "res://artifacts/exploration/station-demo"
 	if OS.get_cmdline_user_args().has("--chapter-rehearsal"):
 		demo_output="res://artifacts/chapter/route-"+("ridge" if OS.get_cmdline_user_args().has("--ridge-detour") else "direct")
+	if OS.get_cmdline_user_args().has("--flow-content"):
+		demo_output="res://artifacts/chapter-flow/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
 	super._ready()
 
 func play_session()->void:
@@ -16,6 +18,11 @@ func play_session()->void:
 	if not await use_target("radio"):return
 	await chapter("值守簿 · 没能发出的平安报")
 	if not await story_click("leave"):return
+	if OS.get_cmdline_user_args().has("--flow-content"):
+		if not await walk_to(Vector2(-3.2,18.2)):return
+		if not await use_target("departure_trace"):return
+		await chapter("空挂钩 · 出巡前的字条")
+		if not await story_click("leave"):return
 	for at in [Vector2(0,20),Vector2(0,17),Vector2(0,14.8),Vector2(1.1,14.8)]:
 		if not await walk_to(at):return
 	if not await use_target("field_medical"):return
@@ -47,12 +54,19 @@ func play_session()->void:
 	await chapter("北侧应急箱 · 为返程补水")
 	for at in [Vector2(0,-160),Vector2(0,-167),Vector2(-2.4,-169.8)]:
 		if not await walk_to(at):return
+	if OS.get_cmdline_user_args().has("--flow-content"):
+		for at in [Vector2(0,-168),Vector2(-.35,-172.15)]:
+			if not await walk_to(at):return
+		if not await use_target("station_cabinet"):return
+		await chapter("零件柜 · 留给后来人的一份柴")
+		for at in [Vector2(0,-168),Vector2(-2.4,-169.8)]:
+			if not await walk_to(at):return
 	for i in range(3):
 		if not await use_target("radio_parts"):return
 		await observe(3)
 	if not await use_target("radio_parts"):return
 	await chapter("维修交接 · 留给后来的人")
-	if not await story_click("ridge" if OS.get_cmdline_user_args().has("--ridge-detour") else "direct"):return
+	if not await story_click("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else ("ridge" if OS.get_cmdline_user_args().has("--ridge-detour") else "direct")):return
 	for at in [Vector2(0,-168),Vector2(1.3,-170.2)]:
 		if not await walk_to(at):return
 	if not OS.get_cmdline_user_args().has("--skip-warmth"):
@@ -69,11 +83,17 @@ func play_session()->void:
 	await chapter("炉火旁 · 预估消耗后休息一小时")
 	if not await press_button_with("休息 1 小时"):return
 	await observe(3);await close_inventory()
-	for at in [Vector2(-.2,-170),Vector2(-.2,-168),Vector2(0,-160),Vector2(0,-140),Vector2(0,-100)]:
+	var return_path:=[Vector2(-.2,-170),Vector2(-.2,-168),Vector2(0,-160)]
+	return_path.append_array([Vector2(6,-153),Vector2(22,-138),Vector2(22,-102),Vector2(0,-100)] if OS.get_cmdline_user_args().has("--sheltered-return") else [Vector2(0,-140),Vector2(0,-100)])
+	for at in return_path:
 		if not await walk_to(at):return
-	await chapter("沿铁路返程 · 迎风更冷，路线更直接")
+	await chapter("沿林道返程 · 绕行树后，观察风压" if OS.get_cmdline_user_args().has("--sheltered-return") else "沿铁路返程 · 迎风更冷，路线更直接")
 	if not await walk_to(Vector2(0,-74)):return
-	if not await walk_to(Vector2(0,-40)):return
+	if OS.get_cmdline_user_args().has("--sheltered-return"):
+		for at in [Vector2(18,-72),Vector2(22,-40),Vector2(22,-24),Vector2(12,-24),Vector2(0,-14)]:
+			if not await walk_to(at):return
+	else:
+		if not await walk_to(Vector2(0,-40)):return
 	if OS.get_cmdline_user_args().has("--ridge-detour"):
 		for at in [Vector2(-10,-29),Vector2(-18,-28),Vector2(-26,-30),Vector2(-31,-33.3)]:
 			if not await walk_to(at):return

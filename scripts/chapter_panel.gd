@@ -1,5 +1,6 @@
 extends PanelContainer
 const Chapter=preload("res://scripts/chapter_one.gd")
+const Routes=preload("res://scripts/route_planner.gd")
 const Palette=preload("res://scripts/field_theme.gd")
 var game
 var scene_kind:=""
@@ -36,6 +37,7 @@ func setup(main)->void:
 
 func show_scene(kind:String)->void:
 	scene_kind=kind;visible=true;refresh()
+	if kind=="departure":game.experience.sound("memory_tape")
 
 func option(id:String,text:String,callback:Callable)->void:
 	var control:Button=game.button(text,callback,choices);control.name="Story_"+id;control.add_theme_font_size_override("font_size",16);Palette.paper_button(control)
@@ -45,9 +47,13 @@ func refresh()->void:
 	var s=game.survival
 	scroll.scroll_vertical=0
 	route_status.visible=scene_kind=="station"
-	scroll.custom_minimum_size.y=190 if scene_kind=="station" else 230
+	scroll.custom_minimum_size.y=145 if scene_kind=="station" else 230
 	body_label.add_theme_font_size_override("font_size",20 if game.preferences.large_text else 17)
-	if scene_kind=="tape_note":
+	if scene_kind=="departure":
+		title_label.text=Chapter.CLUES.departure_trace.title;body_label.text=Chapter.CLUES.departure_trace.text
+		option("leave","放回纸条 · 检查自己的补给",game.close_story)
+		option("replay","再读一遍",func():scroll.scroll_vertical=0;game.experience.sound("memory_tape"))
+	elif scene_kind=="tape_note":
 		title_label.text=Chapter.CLUES.tape_home_note.title;body_label.text=Chapter.CLUES.tape_home_note.text
 		Chapter.discover(s,"tape_home_note")
 		option("leave","收好内页",game.close_story)
@@ -62,7 +68,7 @@ func refresh()->void:
 		body_label.text=Chapter.CLUES.station_dispatch.text
 		route_status.text=return_conditions()
 		option("direct","沿铁路返家 · 路程直接，迎风更冷",func():select_route("direct"))
-		option("sheltered","沿林道返家 · 绕远一些，沿途可避风",func():select_route("sheltered"))
+		option("sheltered","沿林道返家 · 树后避风，可经旧营地",func():select_route("sheltered"))
 		option("ridge","绕访西岭 · 可选收信簿，高地迎风",func():select_route("ridge"))
 	elif scene_kind=="epilogue":
 		match int(s.chapter.epilogue_step):
@@ -102,11 +108,19 @@ func refresh()->void:
 				title_label.text="平安报已送达"
 				body_label.text="谷口值守：下次傍晚，同一频道。七号，我们记着你。\n\n你松开通话键，等了一会儿。听筒里没有再催你赶路。\n\n谷口记下了你的位置。这一次，你可以先照顾好自己。"
 				option("finish","收起听筒",game.close_story)
+	if scene_kind=="radio" and s.chapter.radio_step>=2:
+		option("replay","重读这段通话",func():scroll.scroll_vertical=0;game.experience.sound("radio_connect"))
 	if choices.get_child_count()>0:choices.get_child(0).grab_focus()
 
 func return_conditions()->String:
 	var s=game.survival
-	return "现在 %s · 体温 %d · 木柴 %d · 水 %d\n%s  返程打算可随时在手记里调整。"%[game.DayCycle.clock_text(s.elapsed),s.temperature,s.wood,s.count("water"),"体温偏低，建议先取暖，暂缓登岭。" if s.temperature<40 else ("风雪正在增强，高地与铁路更耗体温。" if s.storm()>.25 else "留意天色，返程还需要时间与补给。")]
+	var lines:Array[String]=["现在 %s · 木柴 %d · 水 %d"%[game.DayCycle.clock_text(s.elapsed),s.wood,s.count("water")],"按当前衣物/步行状态，从维修间返家估算："]
+	for row in [["direct","铁路"],["sheltered","林道"],["ridge","西岭"]]:
+		lines.append(Routes.line(row[1],Routes.forecast(s,row[0],game.world)))
+	lines.append("不计搜寻与动物遭遇；绕行耗时可能抵消避风收益。")
+	if s.temperature<40:lines.append("先添柴取暖；避风不能替代炉火。")
+	elif s.count("water")==0 or s.thirst<35:lines.append("检查水壶：有炉火时可用一份柴融雪。")
+	return "\n".join(lines)
 
 func select_route(route:String)->void:
 	if Chapter.choose_route(game.survival,route):game.close_story();game.notify("已记下返程打算 · "+Chapter.ROUTES[route])

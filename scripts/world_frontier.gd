@@ -1,5 +1,6 @@
 extends "res://scripts/world_polish.gd"
 const Terrain=preload("res://scripts/terrain_profile.gd")
+const BuildingLayouts=preload("res://scripts/building_layouts.gd")
 var buildings:Dictionary={}
 var last_sole:Dictionary={}
 var building_materials:Dictionary={}
@@ -29,6 +30,10 @@ func travel_factor(at:Vector3,motion:Vector3)->float:
 	var depth:=snow_depth(at)
 	var uphill:=maxf(0,-normal_at(at).dot(motion.normalized()))
 	return clampf(1-depth*.38-uphill*.26,.62,1)
+
+func shelter_at(at:Vector3)->String:
+	if absf(at.x)<float(BuildingLayouts.DATA.station.half_width)-.2 and absf(at.z+170)<3.8:return "station"
+	return super.shelter_at(at)
 
 func surface_at(at:Vector3)->String:
 	if shelter_at(at) in ["home","station"]:return "wood"
@@ -109,9 +114,10 @@ func box(at:Vector3,extent:Vector3,color:String,collision:=false,parent:Node3D=s
 
 func add_pickup(id:String,kind:String,at:Vector3,title:String)->void:
 	if id!="radio_parts":super.add_pickup(id,kind,at,title);return
-	# The current imported desk is 24 cm above the legacy floor. Place a compact
-	# module box on its free front edge, clear of the radio and the bed.
-	super.add_pickup(id,kind,Vector3(-2.45,1.19,-170.70),title)
+	# Authored anchor places the compact module on the thick bench
+	# without burying its underside or covering the repair feedback.
+	var socket:Node3D=buildings.station.find_child("ModulePickup",true,false)
+	super.add_pickup(id,kind,socket.global_position,title)
 	var root:Node3D=points.back().node
 	for mesh in root.get_children():
 		if mesh is MeshInstance3D:
@@ -140,7 +146,7 @@ func apply_building_materials(root:Node3D)->void:
 			if original is StandardMaterial3D and original.resource_name.begins_with("Timber"):
 				var key:String=original.resource_name
 				if not building_materials.has(key):
-					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/timber.gdshader");material.set_shader_parameter("timber_color",original.albedo_color);material.set_shader_parameter("floorboards",key.contains("Floor"));building_materials[key]=material
+					var material:=ShaderMaterial.new();material.shader=load("res://assets/shaders/timber.gdshader");material.set_shader_parameter("timber_color",original.albedo_color);material.set_shader_parameter("floorboards",key.contains("Floor"));material.set_shader_parameter("horizontal_boards",key.begins_with("TimberWorkshop"));building_materials[key]=material
 				node.set_surface_override_material(i,building_materials[key])
 			elif original is StandardMaterial3D and original.resource_name in ["IronOxide","WaxedCanvas","CanvasPatch","BlanketWool","PostalPaint"]:
 				var key:String=original.resource_name
@@ -159,17 +165,19 @@ func apply_building_materials(root:Node3D)->void:
 				node.set_surface_override_material(i,building_materials["SnowCap"])
 
 func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
-	var root:Node3D=load("res://assets/architecture/cabin.glb").instantiate();root.name="Cabin_"+id;root.position=at+Vector3(0,.24,0);add_child(root);apply_building_materials(root);buildings[id]=root
+	var layout:Dictionary=BuildingLayouts.DATA[id]
+	var half_width:float=layout.half_width
+	var root:Node3D=load("res://assets/architecture/"+str(layout.asset)+".glb").instantiate();root.name="Cabin_"+id;root.position=at+Vector3(0,.24,0);add_child(root);apply_building_materials(root);buildings[id]=root
 	var nodes:Array[Node3D]=[]
 	for key in ["Roof","CutawayFront","CutawayRight"]:
 		var child:Node3D=root.find_child(key,true,false)
 		if child:nodes.append(child)
-	cutaways.append({"at":at,"nodes":nodes})
-	invisible_wall(at+Vector3(0,.20,0),Vector3(8.2,.08,8.2))
-	invisible_wall(at+Vector3(-4,1.8,0),Vector3(.25,3.4,8))
-	invisible_wall(at+Vector3(4,1.8,0),Vector3(.25,3.4,8))
-	invisible_wall(at+Vector3(0,1.8,-4),Vector3(8,3.4,.25))
-	for x in [-2.47,2.47]:invisible_wall(at+Vector3(x,1.8,4.05),Vector3(3.06,3.4,.27))
+	cutaways.append({"at":at,"nodes":nodes,"half_width":half_width+.4})
+	invisible_wall(at+Vector3(0,.20,0),Vector3(half_width*2+.2,.08,8.2))
+	invisible_wall(at+Vector3(-half_width,1.8,0),Vector3(.25,3.4,8))
+	invisible_wall(at+Vector3(half_width,1.8,0),Vector3(.25,3.4,8))
+	invisible_wall(at+Vector3(0,1.8,-4),Vector3(half_width*2,3.4,.25))
+	for side in [-1,1]:invisible_wall(at+Vector3(side*(half_width+.94)/2,1.8,4.05),Vector3(half_width-.94,3.4,.27))
 	for x in [-1.35,1.35]:invisible_wall(at+Vector3(x,.91,4.92),Vector3(.15,1.4,1.60))
 	invisible_wall(at+Vector3(0,.20,4.8),Vector3(2.7,.08,1.8))
 	# A shallow continuous entrance ramp follows the model's porch, avoiding a capsule-catching step.
@@ -181,16 +189,16 @@ func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 	var ramp_mesh:=SurfaceTool.new();ramp_mesh.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for p in [Vector3(-1.35,.24,5.65),Vector3(1.35,.24,5.65),Vector3(-1.35,0,6.8),Vector3(1.35,.24,5.65),Vector3(1.35,0,6.8),Vector3(-1.35,0,6.8)]:ramp_mesh.add_vertex(at+p)
 	ramp_mesh.generate_normals();var visible_ramp:=MeshInstance3D.new();visible_ramp.mesh=ramp_mesh.commit();visible_ramp.material_override=mat("584f40");add_child(visible_ramp)
-	for obstruction in [[Vector3(-2.4,.49,-2.22),Vector3(1.50,.50,2.2)],[Vector3(2.6,.79,-2),Vector3(.78,1.10,.78)],[Vector3(1.22,.64,1.44),Vector3(1.45,.8,1.35)]]:invisible_wall(at+obstruction[0],obstruction[1])
-	# Furniture uses the imported floor height, not the removed legacy cubes.
-	for obstruction in [[Vector3(-2.43,.68,-1),Vector3(1.45,.88,1.0)],[Vector3(-2.7,.69,2.5),Vector3(1.48,.90,.83)],[Vector3(.3,1.32,-3.68),Vector3(2.20,2.16,.45)]]:
-		invisible_wall(at+obstruction[0],obstruction[1])
+	# The targeted asset builder exports matching room/furniture dimensions.
+	for obstruction in layout.obstructions:
+		var center:Array=obstruction[0];var size:Array=obstruction[1]
+		invisible_wall(at+Vector3(center[0],center[1],center[2]),Vector3(size[0],size[1],size[2]))
 	var storage_body:=StaticBody3D.new();storage_body.name="StorageCollision";root.add_child(storage_body)
 	var storage_shape:=CollisionShape3D.new();var bounds:=BoxShape3D.new();bounds.size=Vector3(1.22,.81,.84);storage_shape.shape=bounds;storage_shape.position=Vector3(2.4,.405,2.4);storage_shape.disabled=true;storage_body.add_child(storage_shape)
 	if id=="station":
-		var equipment:Node3D=load("res://assets/architecture/station_equipment.glb").instantiate();equipment.name="StationLineEquipment";equipment.position=at;add_child(equipment);apply_building_materials(equipment)
-		invisible_wall(at+Vector3(4.35,2.8,-3),Vector3(.23,5.6,.23))
-		invisible_wall(at+Vector3(4.85,.46,-1.8),Vector3(.8,.85,.74))
+		var equipment:Node3D=load("res://assets/architecture/station_equipment.glb").instantiate();equipment.name="StationLineEquipment";equipment.position=at+Vector3(1.25,0,0);add_child(equipment);apply_building_materials(equipment)
+		invisible_wall(at+Vector3(5.60,2.8,-3),Vector3(.23,5.6,.23))
+		invisible_wall(at+Vector3(6.10,.46,-1.8),Vector3(.8,.85,.74))
 	var flame:MeshInstance3D=root.find_child("FireWindow",true,false);flame.visible=false;fire_meshes[id]=flame
 	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.5,-1.3);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
 	var lamp:=OmniLight3D.new();lamp.position=Vector3(.5,2.2,1.8);lamp.light_color=Color("dfb783");lamp.light_energy=.8;lamp.omni_range=7;root.add_child(lamp)

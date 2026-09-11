@@ -21,6 +21,7 @@ const Saves=preload("res://scripts/journey_saves.gd")
 const SAVE_PATH := "user://saves/manual.json"
 var checkpoint_button:Button
 var experience
+var exploration
 var automatic_saves:=true
 var save_path := SAVE_PATH
 var survival = Survival.new()
@@ -94,6 +95,7 @@ func _ready() -> void:
 	cassette.breath_pulse.connect(player.exhale)
 	field=preload("res://scripts/field_expedition.gd").new();add_child(field);field.setup(self)
 	experience=preload("res://scripts/chapter_experience.gd").new();add_child(experience);experience.setup(self)
+	exploration=preload("res://scripts/exploration_details.gd").new();add_child(exploration);exploration.setup(self)
 	player.collision_mask=5
 	world.sync_buildings(survival)
 	set_menu(true)
@@ -327,6 +329,7 @@ func start_new() -> void:
 	survival.kit.owned[survival.kit.equipped.feet].wet=35
 	if field!=null:field.reset()
 	if experience!=null:experience.reset()
+	if exploration!=null:exploration.sync(true)
 	player.position = Vector3(0, world.terrain_height(0,38)+.2, 38)
 	player.velocity = Vector3.ZERO
 	player.pivot.rotation = Vector3(Player.CAMERA_PITCH, Player.CAMERA_YAW, 0)
@@ -422,6 +425,7 @@ func _process(delta: float) -> void:
 			survival.chapter.weather_warned=true
 			notify("风正在变硬。先找背风处；铁路直返，林道绕远但避风。")
 		if survival.health <= 0: set_menu(true)
+	cassette.fire_distance=player.position.distance_to(world.fire_meshes[shelter].global_position) if world.fire_meshes.has(shelter) else 0.0
 	cassette.sync(survival,menu.visible,shelter.is_empty(),Vector2(player.velocity.x,player.velocity.z).length() if active else 0.0,float(survival.fires.get(shelter,0))>0,active)
 	world.update_snow(player.position,delta if active else 0.0,survival.storm())
 	world.weather_update(survival.storm(), player.position, survival.fires, survival.elapsed)
@@ -468,7 +472,7 @@ func interact() -> void:
 		backpack.tab="craft";toggle_backpack();return
 	pending_action=target.duplicate()
 	action_origin=player.position;action_clock=0
-	action_duration=.7 if target.kind in ["loot","wood","food","parts","clue"] else .85
+	action_duration=1.6 if target.kind=="cabinet" else (.7 if target.kind in ["loot","wood","food","parts","clue"] else .85)
 	player.play_action("Pickup" if target.kind in ["loot","wood","food","parts"] else "Interact")
 
 func advance_action(delta:float)->void:
@@ -479,9 +483,12 @@ func advance_action(delta:float)->void:
 	if action_clock<action_duration:return
 	var action:=pending_action.duplicate();cancel_action()
 	match action.kind:
+		"cabinet":notify(exploration.search())
 		"loot":notify(survival.loot(action.id,action.contents))
 		"clue":
 			if not survival.discovered.has(action.id):survival.discovered.append(action.id)
+			if action.id=="departure_trace":
+				open_story("departure");return
 			backpack.journal_focus=action.id;backpack.tab="journal";toggle_backpack()
 			notify("已记下这条线索。")
 		"fire":notify(survival.light_fire(action.id))
@@ -537,7 +544,7 @@ func update_hud(shelter:String,windbreak:bool)->void:
 	prompt.text="[ E ]  "+str(target.title) if active and not target.is_empty() else ""
 	if active and target.get("kind")=="radio":
 		prompt.text="[ E ]  "+(("回顾 · 旧频道记录" if survival.chapter.epilogue_step==3 else "旧频道有微弱信号") if survival.completed else ("接起听筒 · 继续通话" if survival.chapter.radio_step>0 else ("安装模块 · 恢复通信" if survival.parts else "查看无线电 · 值守记录")))
-	if not pending_action.is_empty():prompt.text=("正在查看" if pending_action.kind=="clue" else ("正在添柴" if pending_action.kind=="fire" else "正在操作"))+" · 移动取消"
+	if not pending_action.is_empty():prompt.text=("正在查看" if pending_action.kind=="clue" else ("正在添柴" if pending_action.kind=="fire" else ("正在搜寻" if pending_action.kind=="cabinet" else "正在操作")))+" · 移动取消"
 	if field!=null and active:
 		var field_context:String=field.context_text()
 		if not field_context.is_empty():prompt.text=field_context
@@ -592,6 +599,7 @@ func load_game(from_checkpoint:=false) -> void:
 	survival = candidate
 	if field!=null:field.reset()
 	if experience!=null:experience.reset()
+	if exploration!=null:exploration.sync(true)
 	backpack.visible=false
 	story_panel.visible=false
 	world.sync_buildings(survival)

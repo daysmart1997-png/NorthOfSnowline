@@ -9,6 +9,7 @@ const BACKDROP_PLANE:=64
 const OUTDOOR_MARKERS:=128
 const OUTDOOR_VIEW:=OUTDOOR | ACTOR | 2 | 4 | SNOW_DETAIL | OUTDOOR_MARKERS
 const ROOMS:={"home":2,"station":4}
+const BuildingLayouts=preload("res://scripts/building_layouts.gd")
 var world:Node3D
 var player:CharacterBody3D
 var room:=""
@@ -56,7 +57,8 @@ func room_at(at:Vector3)->String:
 		var center:Vector3=world.buildings[id].global_position
 		# A small doorway hysteresis avoids flicker when feet straddle the sill.
 		var edge:=3.95 if room==id else 3.80
-		if absf(at.x-center.x)<edge and absf(at.z-center.z)<edge and at.y>=center.y-.5 and at.y<center.y+3.5:return id
+		var x_edge:float=float(BuildingLayouts.DATA[id].half_width)-4.0+edge
+		if absf(at.x-center.x)<x_edge and absf(at.z-center.z)<edge and at.y>=center.y-.5 and at.y<center.y+3.5:return id
 	return ""
 
 func build_backdrop()->void:

@@ -37,7 +37,7 @@ func _ready()->void:
 	add_point("workbench","workbench",Vector3(-2.5,.8,20.5),"工作台 · 制作与修缮")
 	box(Vector3(-2.7,.4,20.5),Vector3(1.4,.8,.75),"35414a",true)
 	add_point("home_bed","rest",Vector3(-2.4,.7,15.8),"床铺 · 休息")
-	add_point("station_bed","rest",Vector3(-2.4,.7,-172.2),"维修间床铺 · 休息")
+	add_point("station_bed","rest",Vector3(4.12,.7,-168.5),"折叠床 · 休息")
 	make_tent(Vector3(22,terrain_height(22,-62),-62),"hunters",self)
 	# A distinctive delivery van makes the optional cassette discovery legible.
 	var van:Node3D=load("res://assets/architecture/delivery_van.glb").instantiate()

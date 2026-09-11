@@ -2,6 +2,9 @@ extends Node
 signal shutdown_requested
 signal breath_pulse(effort:float)
 var cue_seconds:=12.0
+var alert_seconds:=0.0
+var wind_filter:AudioEffectLowPassFilter
+var fire_distance:=0.0
 var speaker:AudioStreamPlayer
 var current_tape:=""
 var wind:AudioStreamPlayer
@@ -34,6 +37,14 @@ func _ready()->void:
 	breathing=AudioStreamPlayer.new();breathing.volume_db=-25;add_child(breathing)
 	speaker.bus="SnowMusic";background.bus="SnowMusic"
 	for voice in [wind,fire,breathing]+step_voices:voice.bus="SnowEffects"
+	if AudioServer.get_bus_index("SnowWind")<0:
+		AudioServer.add_bus();AudioServer.set_bus_name(AudioServer.bus_count-1,"SnowWind")
+	var wind_bus:=AudioServer.get_bus_index("SnowWind")
+	AudioServer.set_bus_send(wind_bus,"SnowEffects")
+	if AudioServer.get_bus_effect_count(wind_bus)==0:
+		AudioServer.add_bus_effect(wind_bus,AudioEffectLowPassFilter.new())
+	wind_filter=AudioServer.get_bus_effect(wind_bus,0)
+	wind.bus="SnowWind"
 	for surface in ["snow","deep","ice","wood"]:
 		var samples:Array[AudioStream]=[]
 		for i in range(8 if surface in ["snow","deep"] else 4):samples.append(load("res://assets/audio/step_%s_%d.wav"%[surface,i]))
@@ -68,7 +79,11 @@ func sync(state,paused:bool,outside:=true,speed:=0.0,burning:=false,simulating:=
 	var wind_target:float=(-21.0+state.storm()*5.0) if outside else -35.0
 	if reading:wind_target-=5.0
 	wind.volume_db=lerpf(wind.volume_db,wind_target,minf(delta*2,1))
-	fire.volume_db=lerpf(fire.volume_db,-18.0 if burning else -80.0,minf(delta*3,1))
+	wind_filter.cutoff_hz=lerpf(wind_filter.cutoff_hz,11000.0 if outside else 900.0,minf(delta*3,1))
+	if simulating and not paused:alert_seconds=maxf(0,alert_seconds-delta)
+	var fire_target:float=-18.0-clampf(fire_distance-1.5,0,8)*1.6 if burning else -80.0
+	if reading:fire_target-=4.0
+	fire.volume_db=lerpf(fire.volume_db,fire_target,minf(delta*3,1))
 	if simulating and not paused:
 		var effort:float=clampf(maxf((100-state.stamina)/85.0,.72 if speed>2.8 else .06)+(maxf(0,25-state.temperature)/100.0),0,1)
 		breathing_effort=move_toward(breathing_effort,effort,delta*(.19 if effort>breathing_effort else .065))
@@ -83,9 +98,10 @@ func sync(state,paused:bool,outside:=true,speed:=0.0,burning:=false,simulating:=
 	if not paused:cue_seconds=maxf(0,cue_seconds-delta)
 	var background_target:float=-65.0 if not desired.is_empty() or cue_seconds<=0 else (-35.0 if outside else -32.0)
 	if reading:background_target-=5.0
+	if alert_seconds>0:background_target-=10.0
 	background.volume_db=lerpf(background.volume_db,background_target,minf(delta*.8,1))
 	var switching:=not desired.is_empty() and desired!=current_tape and speaker.playing
-	tape_gain=move_toward(tape_gain,-60.0 if desired.is_empty() or switching else (-19.0 if reading else -14.0),delta*100.0)
+	tape_gain=move_toward(tape_gain,-60.0 if desired.is_empty() or switching else (-24.0 if alert_seconds>0 else (-21.0 if reading else -14.0)),delta*100.0)
 	speaker.volume_db=tape_gain;speaker.stream_paused=paused
 	if desired.is_empty():
 		if tape_gain<=-59.9:speaker.stop();current_tape=""

@@ -397,7 +397,7 @@ func weather_update(storm: float, at: Vector3, fires: Dictionary, elapsed := 0.0
 	snow.speed_scale = 0.8 + storm * 1.5
 	snow.visible = shelter_at(at).is_empty()
 	for cutaway in cutaways:
-		var inside: bool = absf(at.x - cutaway.at.x) < 4.4 and absf(at.z - cutaway.at.z) < 4.5
+		var inside: bool = absf(at.x - cutaway.at.x) < float(cutaway.get("half_width",4.4)) and absf(at.z - cutaway.at.z) < 4.5
 		for node in cutaway.nodes: node.visible = not inside
 	for key in fire_lights:
 		var active := float(fires[key]) > 0.0
