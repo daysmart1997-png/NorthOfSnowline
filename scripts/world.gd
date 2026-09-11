@@ -138,8 +138,8 @@ func _ready() -> void:
 		cone(at, rng.randf_range(42, 62), h, "607884")
 		cone(at + Vector3(0, h * 0.24, 0), 18, h * 0.48, "acbec6")
 	for x in [-93, 93]:
-		invisible_wall(Vector3(x, 4, -80), Vector3(2, 12, 270))
-	for z in [-214, 52]:
+		invisible_wall(Vector3(x, 4, -35), Vector3(2, 12, 360))
+	for z in [-214, 142]:
 		invisible_wall(Vector3(0, 4, z), Vector3(190, 12, 2))
 	cabin(Vector3(0, 0, 18), "home", "29374b", "林区 · 07 号护林站")
 	cabin(Vector3(0, 0, -170), "station", "513f47", "北岭车站 · 维修间")
@@ -397,7 +397,7 @@ func weather_update(storm: float, at: Vector3, fires: Dictionary, elapsed := 0.0
 	snow.speed_scale = 0.8 + storm * 1.5
 	snow.visible = shelter_at(at).is_empty()
 	for cutaway in cutaways:
-		var inside: bool = absf(at.x - cutaway.at.x) < float(cutaway.get("half_width",4.4)) and absf(at.z - cutaway.at.z) < 4.5
+		var inside: bool = absf(at.x - cutaway.at.x) < float(cutaway.get("half_width",4.4)) and absf(at.z - cutaway.at.z) < float(cutaway.get("half_depth",4.5))
 		for node in cutaway.nodes: node.visible = not inside
 	for key in fire_lights:
 		var active := float(fires[key]) > 0.0

@@ -4,7 +4,7 @@ const Rules=preload("res://scripts/expedition.gd")
 const Icon=preload("res://scripts/item_icon.gd")
 const Slot=preload("res://scripts/inventory_slot.gd")
 const GROUPS={"all":"全部","food":"食水","medical":"医疗","materials":"材料","gear":"装备","tapes":"磁带"}
-const TAB_HINTS={"character":"点击部位查看衣着与身体；操作前显示需要的物资与炉火。","items":"点击物品查看；将磁带或电池拖到右侧磁带机。","craft":"选择配方制作；数字表示现有材料 / 所需材料。","journal":"探索记录保存在手记中；返回探索后按 Tab 查看路线。"}
+const TAB_HINTS={"character":"点击部位查看衣着与身体；操作前显示需要的物资与炉火。","items":"点击物品查看；将磁带或电池拖到右侧磁带机。","craft":"选择配方制作；数字表示现有材料 / 所需材料。","search":"按需取走，剩余物资保留原处；查看时暂停。","journal":"探索记录保存在手记中；返回探索后按 Tab 查看路线。"}
 var character_part:="feet"
 var character_angle:=PI-.3
 var body_view:=false
@@ -14,6 +14,8 @@ var status:Label
 var feedback:Label
 var body:VBoxContainer
 var category_bar:HBoxContainer
+var source_id:=""
+var preview_action:=""
 var selected:="player"
 var tab:="items"
 var category:="all"
@@ -102,11 +104,15 @@ func refresh()->void:
 		var sheet=preload("res://scripts/character_sheet.gd").new();content.add_child(sheet);sheet.setup(game,self);return
 	var scroll:=ScrollContainer.new();scroll.custom_minimum_size=Vector2(592,318);scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;content.add_child(scroll)
 	var left:=VBoxContainer.new();left.size_flags_horizontal=Control.SIZE_EXPAND_FILL;left.add_theme_constant_override("separation",8);scroll.add_child(left)
-	var right:=VBoxContainer.new();right.custom_minimum_size.x=420;right.add_theme_constant_override("separation",10);content.add_child(right)
+	var right_scroll:=ScrollContainer.new();right_scroll.custom_minimum_size.x=430;right_scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;right_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;content.add_child(right_scroll)
+	var right:=VBoxContainer.new();right.custom_minimum_size.x=414;right.add_theme_constant_override("separation",10);right_scroll.add_child(right)
+	if tab=="search":
+		search_contents(left,right,s);return
 	if tab=="items":
 		var available:Array[String]=[]
 		for id in Rules.ITEMS:
 			if (s.count(id)>0 or int(s.storage.get(id,0))>0) and (category=="all" or group_of(id)==category):available.append(id)
+		if preview_action=="use" and selected in Rules.Arrival.ITEMS and not available.has(selected):available.append(selected)
 		if not available.has(selected) and not available.is_empty():selected=available[0]
 		var grid:=GridContainer.new();grid.columns=3;grid.add_theme_constant_override("h_separation",9);grid.add_theme_constant_override("v_separation",9);left.add_child(grid)
 		for id in available:
@@ -123,16 +129,16 @@ func refresh()->void:
 		if not available.is_empty():item_details(right,s)
 		cassette_dock(right,s)
 	elif tab=="craft":
+		var shelter:String=game.world.shelter_at(game.player.position)
 		for id in Rules.RECIPES:
 			var recipe:String=id;var cost:Array[String]=[]
 			for item in Rules.RECIPES[id].cost:cost.append("%s %d/%d"%[Rules.ITEMS[item].name,s.count(item),Rules.RECIPES[id].cost[item]])
-			var shelter:String=game.world.shelter_at(game.player.position)
 			var valid:bool=not game.world.candidate_camp(game.player.position).is_empty() if id=="camp" else false
 			var problem:String=s.recipe_problem(id,shelter,valid)
 			var button=game.button(Rules.RECIPES[id].name+"\n"+" · ".join(cost)+("\n"+problem if not problem.is_empty() else ""),func():do_action("craft",recipe),left)
 			button.name="Recipe_"+id;button.disabled=not problem.is_empty();button.tooltip_text=problem;button.add_theme_font_size_override("font_size",14)
-		right.add_child(game.label("把这里变成一个家",24,Palette.INK))
-		var description:Label=game.label("封窗减缓失温，炉火才能回暖。\n修好床铺，为下一次出发养足精神。",15);description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(description)
+		right.add_child(game.label("临时休整" if shelter in ["gatehouse","lodge"] else "把这里变成一个家",24,Palette.INK))
+		var description:Label=game.label(Rules.Arrival.SITES[shelter].description if Rules.Arrival.SITES.has(shelter) else "封窗减缓失温，炉火才能回暖。\n修好床铺，为下一次出发养足精神。",15);description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(description)
 		build_rest_controls(right,s)
 	else:
 		var entries:Array=game.world.pois.filter(func(p):return not game.Chapter.CLUES.has(p.id))
@@ -174,6 +180,7 @@ func build_rest_controls(right:VBoxContainer,s)->void:
 
 func item_details(right:VBoxContainer,s)->void:
 	right.add_child(game.label(Rules.ITEMS[selected].name,22,Palette.INK))
+	if selected in Rules.Arrival.ITEMS:add_preview(right,selected)
 	var desc:Label=game.label(Rules.ITEMS[selected].description,15);desc.custom_minimum_size.x=414;desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(desc)
 	right.add_child(game.label("%s  ·  随身 %d / 储存 %d  ·  %.2f kg/份"%[GROUPS[group_of(selected)],s.count(selected),int(s.storage.get(selected,0)),Rules.ITEMS[selected].weight],13,Palette.MUTED))
 	var usable:=selected in ["food","water","tea","bandage","battery","player","medicine","splint","cooked_meat","raw_meat","knife","bow","rifle"] or Rules.Kit.GEAR.has(selected) or selected.begins_with("tape_")
@@ -187,7 +194,7 @@ func item_details(right:VBoxContainer,s)->void:
 		var home_storage:bool=s.upgrades.storage and game.world.shelter_at(game.player.position)=="home"
 		var deposit=game.button("存入",func():do_action("deposit",selected),row);deposit.disabled=not home_storage or s.count(selected)==0;deposit.tooltip_text="需要在小屋制作储物箱"
 		var withdraw=game.button("取出",func():do_action("withdraw",selected),row);withdraw.disabled=not home_storage or int(s.storage.get(selected,0))==0
-		var discard=game.button("丢弃一份",func():do_action("discard",selected),row);discard.disabled=s.count(selected)==0
+		var discard=game.button("放下一份" if selected in Rules.Arrival.ITEMS else "丢弃一份",func():do_action("discard",selected),row);discard.disabled=s.count(selected)==0
 
 func cassette_dock(right:VBoxContainer,s)->void:
 	if s.count("player")<=0:return
@@ -199,7 +206,12 @@ func cassette_dock(right:VBoxContainer,s)->void:
 	right.add_child(game.label(("▶ " if s.music_playing else "■ ")+tape_name+"  ·  "+("试听中" if s.music_playing else "已停止"),14,Palette.ACCENT))
 
 func do_action(kind:String,id:String)->void:
-	feedback.text=game.backpack_action(kind,id);refresh()
+	feedback.text=game.backpack_action(kind,id)
+	var show_use:bool=kind=="use" and preview_action=="use"
+	refresh()
+	if show_use:
+		var finish=create_tween();finish.tween_interval(1.1);finish.tween_callback(func():
+			if visible and tab=="items" and selected==id:refresh())
 
 func shutdown_ui()->void:
 	if roll_tween and roll_tween.is_valid():roll_tween.kill()
@@ -215,3 +227,21 @@ func _draw()->void:
 	for y in range(16,int(size.y)-12,12):
 		draw_line(Vector2(10,y),Vector2(10,y+5),seam,1)
 		draw_line(Vector2(size.x-10,y),Vector2(size.x-10,y+5),seam,1)
+
+func add_preview(parent:Control,item:String)->void:
+	var preview=preload("res://scripts/item_preview.gd").new();preview.item_id=item;preview.action=preview_action;preview_action="";parent.add_child(preview)
+
+func search_contents(left:VBoxContainer,right:VBoxContainer,s)->void:
+	if not Rules.Arrival.SUPPLIES.has(source_id):left.add_child(game.label("这里没有待查看的物资。",18));return
+	var spec:Dictionary=Rules.Arrival.SUPPLIES[source_id]
+	left.add_child(game.label(spec.title,23,Palette.INK))
+	left.add_child(game.label("只拿需要的，剩余物资会留在原处。",15,Palette.MUTED))
+	if not spec.contents.has(selected):selected=spec.contents.keys()[0]
+	for item in spec.contents:
+		var remaining:int=int(spec.contents[item])-int(s.supply_taken.get(source_id,{}).get(item,0))
+		var choose=game.button("%s  ×%d"%[Rules.ITEMS[item].name,remaining],func():selected=item;refresh(),left);choose.name="Inspect_"+item
+	right.add_child(game.label(Rules.ITEMS[selected].name,23,Palette.INK));add_preview(right,selected)
+	var desc=game.label(Rules.ITEMS[selected].description,15);desc.custom_minimum_size.x=400;desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(desc)
+	var remaining:int=int(spec.contents[selected])-int(s.supply_taken.get(source_id,{}).get(selected,0))
+	var take=game.button("取走一份 · %.2f kg"%Rules.ITEMS[selected].weight,func():do_action("take_supply",selected),right);take.name="TakeSupply";take.disabled=remaining<=0 or s.weight()+Rules.ITEMS[selected].weight>s.MAX_WEIGHT
+	right.add_child(game.label("已取完，可以留下空包。" if remaining<=0 else ("背包余量不足；可先使用或放下随身物资。" if take.disabled else "剩余 %d 份 · 随身 %d 份"%[remaining,s.count(selected)]),14,Palette.MUTED))

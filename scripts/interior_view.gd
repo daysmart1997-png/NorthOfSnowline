@@ -7,8 +7,9 @@ const BACKDROP_GROUND:=16
 const SNOW_DETAIL:=32
 const BACKDROP_PLANE:=64
 const OUTDOOR_MARKERS:=128
-const OUTDOOR_VIEW:=OUTDOOR | ACTOR | 2 | 4 | SNOW_DETAIL | OUTDOOR_MARKERS
-const ROOMS:={"home":2,"station":4}
+const OUTDOOR_VIEW:=OUTDOOR | ACTOR | 2 | 4 | 256 | 512 | SNOW_DETAIL | OUTDOOR_MARKERS
+const ROOMS:={"home":2,"station":4,"gatehouse":256,"lodge":512}
+const Arrival=preload("res://scripts/arrival_catalog.gd")
 const BuildingLayouts=preload("res://scripts/building_layouts.gd")
 var world:Node3D
 var player:CharacterBody3D
@@ -57,7 +58,10 @@ func room_at(at:Vector3)->String:
 		var center:Vector3=world.buildings[id].global_position
 		# A small doorway hysteresis avoids flicker when feet straddle the sill.
 		var edge:=3.95 if room==id else 3.80
-		var x_edge:float=float(BuildingLayouts.DATA[id].half_width)-4.0+edge
+		var half_width:float=Arrival.SITES[id].half_width if Arrival.SITES.has(id) else BuildingLayouts.DATA[id].half_width
+		var half_depth:float=Arrival.SITES[id].half_depth if Arrival.SITES.has(id) else 4.0
+		var x_edge:float=half_width-4.0+edge
+		edge=half_depth-4.0+edge
 		if absf(at.x-center.x)<x_edge and absf(at.z-center.z)<edge and at.y>=center.y-.5 and at.y<center.y+3.5:return id
 	return ""
 

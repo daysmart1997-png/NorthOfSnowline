@@ -22,6 +22,7 @@ const SAVE_PATH := "user://saves/manual.json"
 var checkpoint_button:Button
 var experience
 var exploration
+var arrival_items
 var automatic_saves:=true
 var save_path := SAVE_PATH
 var survival = Survival.new()
@@ -96,6 +97,7 @@ func _ready() -> void:
 	field=preload("res://scripts/field_expedition.gd").new();add_child(field);field.setup(self)
 	experience=preload("res://scripts/chapter_experience.gd").new();add_child(experience);experience.setup(self)
 	exploration=preload("res://scripts/exploration_details.gd").new();add_child(exploration);exploration.setup(self)
+	arrival_items=preload("res://scripts/arrival_items.gd").new();add_child(arrival_items);arrival_items.setup(self)
 	player.collision_mask=5
 	world.sync_buildings(survival)
 	set_menu(true)
@@ -325,12 +327,14 @@ func show_settings(show:bool)->void:
 func start_new() -> void:
 	cancel_action()
 	survival = Survival.new()
-	survival.temperature=68;survival.energy=70
+	survival.temperature=68;survival.energy=70;survival.arrival_journey=true
+	survival.items={"wood":1,"food":0,"water":1}
 	survival.kit.owned[survival.kit.equipped.feet].wet=35
 	if field!=null:field.reset()
 	if experience!=null:experience.reset()
 	if exploration!=null:exploration.sync(true)
-	player.position = Vector3(0, world.terrain_height(0,38)+.2, 38)
+	if arrival_items!=null:arrival_items.sync(true)
+	player.position = Vector3(0, world.terrain_height(0,130)+.2, 130)
 	player.velocity = Vector3.ZERO
 	player.pivot.rotation = Vector3(Player.CAMERA_PITCH, Player.CAMERA_YAW, 0)
 	player.clear_footprints()
@@ -341,7 +345,7 @@ func start_new() -> void:
 	world.refresh_pickups([])
 	started = true
 	set_menu(false)
-	notify("连夜赶路让你又冷又渴。前方是七号小屋；B 取用食水、查看人物。")
+	notify("最后一份口粮已经吃完。沿山口往低处走，寻找食物与避风处；B 查看行囊。")
 
 func set_menu(show_menu: bool) -> void:
 	if show_menu:
@@ -371,7 +375,7 @@ func set_menu(show_menu: bool) -> void:
 		menu_title.text = "你倒在了风雪里"
 		menu_info.text = "下次可以在车站火炉旁恢复体温，\n或沿东侧避风林道返程。\n读取保存，或重新开始。"
 	else:
-		menu_info.text = "昨夜山崩截断了下山路，你的平安报还没发出。\n桌上值守簿提到北岭维修间的备用模块。\n恢复通信，询问失联搭档周岑的消息。"
+		menu_info.text = "你穿过风雪中的山口，口粮已经用尽。\n沿途搜寻食物与落脚处，找到能长期安顿的护林小屋。\n恢复通信，询问失联搭档周岑的消息。"
 
 func _unhandled_input(event: InputEvent) -> void:
 	if capture_mode:return
@@ -413,18 +417,25 @@ func _process(delta: float) -> void:
 	var windbreak: bool = world.windbreak_at(player.position)
 	if active:
 		survival.tick(delta, shelter, windbreak, player.sprinting)
+		if survival.arrival_journey and player.position.z<123 and not survival.discovered.has("pass_exit"):
+			survival.discovered.append("pass_exit")
+			if not survival.discovered.has("home_reached"):notify("电线杆旁露出一段铁皮屋檐。也许能找到留下的食物。")
+		if shelter in ["gatehouse","lodge","home"] and not survival.discovered.has(shelter if shelter!="home" else "home_reached"):
+			survival.discovered.append(shelter if shelter!="home" else "home_reached")
+			notify("找到护林小屋 · 检查炉火与无线电，准备在这里安顿" if shelter=="home" else survival.Arrival.SITES[shelter].description)
 		player.move_factor = survival.speed_factor()*world.travel_factor(player.position,player.velocity)
 		# Hysteresis prevents exhausted sprint toggling every frame.
 		player.can_sprint = survival.stamina > (1.0 if player.sprinting else 22.0) and not survival.kit.has_condition("sprain")
 		update_target()
 		advance_action(delta)
 		for poi in world.pois:
-			if not poi.get("inspect",false) and not survival.discovered.has(poi.id) and player.position.distance_to(poi.at)<9:
+			if not poi.get("inspect",false) and not poi.get("enter",false) and not survival.discovered.has(poi.id) and player.position.distance_to(poi.at)<9:
 				survival.discovered.append(poi.id);notify("发现："+poi.title+" · 已记入手记")
 		if active and survival.parts and not survival.completed and not survival.chapter.weather_warned and shelter.is_empty() and (survival.storm()>.35 or DayCycle.cold(survival.elapsed)>.35):
 			survival.chapter.weather_warned=true
 			notify("风正在变硬。先找背风处；铁路直返，林道绕远但避风。")
 		if survival.health <= 0: set_menu(true)
+	cassette.room_id=shelter
 	cassette.fire_distance=player.position.distance_to(world.fire_meshes[shelter].global_position) if world.fire_meshes.has(shelter) else 0.0
 	cassette.sync(survival,menu.visible,shelter.is_empty(),Vector2(player.velocity.x,player.velocity.z).length() if active else 0.0,float(survival.fires.get(shelter,0))>0,active)
 	world.update_snow(player.position,delta if active else 0.0,survival.storm())
@@ -472,7 +483,7 @@ func interact() -> void:
 		backpack.tab="craft";toggle_backpack();return
 	pending_action=target.duplicate()
 	action_origin=player.position;action_clock=0
-	action_duration=1.6 if target.kind=="cabinet" else (.7 if target.kind in ["loot","wood","food","parts","clue"] else .85)
+	action_duration=1.6 if target.kind in ["cabinet","supply"] else (.7 if target.kind in ["loot","wood","food","parts","clue"] else .85)
 	player.play_action("Pickup" if target.kind in ["loot","wood","food","parts"] else "Interact")
 
 func advance_action(delta:float)->void:
@@ -483,6 +494,10 @@ func advance_action(delta:float)->void:
 	if action_clock<action_duration:return
 	var action:=pending_action.duplicate();cancel_action()
 	match action.kind:
+		"supply":
+			if not survival.discovered.has("searched_"+action.id):survival.discovered.append("searched_"+action.id)
+			backpack.source_id=action.id;backpack.tab="search";toggle_backpack();return
+		"placed":notify(arrival_items.recover(int(action.key)))
 		"cabinet":notify(exploration.search())
 		"loot":notify(survival.loot(action.id,action.contents))
 		"clue":
@@ -534,6 +549,8 @@ func update_hud(shelter:String,windbreak:bool)->void:
 	if not shelter.is_empty():
 		var remaining:=float(survival.fires.get(shelter,0))
 		context_label.text="庇护所 · 炉火剩余 %d 分钟 · 正在回暖"%ceili(remaining) if remaining>0 else ("庇护所 · 已封窗，失温减缓" if shelter=="home" and survival.upgrades.insulation else "庇护所 · 尚未点火")
+		if shelter=="gatehouse":context_label.text="临时避风 · 破窗漏风 · 无炉无卧铺"
+		elif shelter=="lodge":context_label.text="临时木屋 · "+("炉火剩余 %d 分钟 · 可预估休息"%ceili(remaining) if remaining>0 else "有炉有卧铺 · 需自行添柴")
 	elif survival.temperature<25:context_label.text="体温过低 · 尽快寻找火炉"
 	elif DayCycle.cold(survival.elapsed)>.65:context_label.text="夜间严寒 · 林道避风，尽早寻找庇护所" if windbreak else "夜间严寒 · 回庇护所生火取暖"
 	elif DayCycle.phase(survival.elapsed)=="暮色":context_label.text="天色渐暗 · 留好返程的木柴与口粮"
@@ -600,10 +617,11 @@ func load_game(from_checkpoint:=false) -> void:
 	if field!=null:field.reset()
 	if experience!=null:experience.reset()
 	if exploration!=null:exploration.sync(true)
+	if arrival_items!=null:arrival_items.sync(true)
 	backpack.visible=false
 	story_panel.visible=false
 	world.sync_buildings(survival)
-	player.position = Vector3(clampf(p[0], -90, 90), clampf(p[1], -5, 16), clampf(p[2], -210, 49))
+	player.position = Vector3(clampf(p[0], -90, 90), clampf(p[1], -5, 16), clampf(p[2], -210, 140))
 	player.position.y=maxf(player.position.y,world.terrain_height(player.position.x,player.position.z)+.06)
 	player.velocity = Vector3.ZERO
 	player.pivot.rotation = Vector3(Player.CAMERA_PITCH, Player.CAMERA_YAW, 0)
@@ -625,6 +643,7 @@ func toggle_backpack()->void:
 func backpack_action(kind:String,id:String)->String:
 	var shelter:String=world.shelter_at(player.position)
 	var result:=""
+	var before:int=survival.count(id)
 	match kind:
 		"use":
 			result=survival.use_item(id)
@@ -632,13 +651,15 @@ func backpack_action(kind:String,id:String)->String:
 		"music":result=survival.toggle_music()
 		"deposit":result=survival.transfer(id,true,shelter)
 		"withdraw":result=survival.transfer(id,false,shelter)
-		"discard":result=survival.discard(id)
+		"discard":result=arrival_items.place(id) if id in survival.Arrival.ITEMS else survival.discard(id)
+		"take_supply":result=arrival_items.take(backpack.source_id,id)
 		"rest":result=survival.rest(shelter,int(id) if not id.is_empty() else 2)
 		"craft":
 			var position_array:Array=world.candidate_camp(player.position) if id=="camp" else []
 			if int(Survival.RECIPES.get(id,{}).get("minutes",0))>0:return field.start_job("craft",id)
 			result=survival.craft(id,shelter,position_array)
 			world.sync_buildings(survival)
+	if kind=="use" and survival.count(id)<before:arrival_items.feedback(id,"use")
 	if survival.health<=0:
 		backpack.visible=false;set_menu(true)
 	return result
@@ -695,11 +716,11 @@ func frontier_check()->void:
 	for i in range(35):await get_tree().physics_frame
 	assert(player.is_on_floor() and absf(player.position.y+1.65)<.06,"Lake collision agrees with visible ice level")
 	for name in ["Interior","Roof","StorageChest","UpgradeBed","WindowRepairs"]:assert(world.buildings.home.find_child(name,true,false)!=null)
-	assert(world.get_node("TimberTrestleBridge")!=null and world.pois.filter(func(p):return not p.get("inspect",false)).size()==9)
+	assert(world.get_node("TimberTrestleBridge")!=null and world.pois.filter(func(p):return not p.get("inspect",false)).size()==11)
 	active=false;player.enabled=false;set_process(false);cassette.shutdown();story_panel.shutdown_audio();backpack.shutdown_ui()
 	await get_tree().process_frame;await get_tree().process_frame
 	OS.delay_msec(100)
-	print("FRONTIER_OK: ridge/basin/lake heights, independent snow accumulation, depth compression, continuous grooves, ice exclusion, live foot IK, terrain collision, modular interiors, nine places plus inspectable clues")
+	print("FRONTIER_OK: ridge/basin/lake heights, independent snow accumulation, depth compression, continuous grooves, ice exclusion, live foot IK, terrain collision, modular interiors, eleven places plus inspectable clues")
 	get_tree().quit()
 
 func integration_check() -> void:

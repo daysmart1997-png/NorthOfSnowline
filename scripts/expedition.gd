@@ -7,6 +7,13 @@ const Chapter = preload("res://scripts/chapter_one.gd")
 
 const DayCycle = preload("res://scripts/day_cycle.gd")
 
+const Arrival=preload("res://scripts/arrival_catalog.gd")
+const ArrivalState=preload("res://scripts/arrival_state.gd")
+var arrival_journey:=false
+var supply_taken:Dictionary={}
+var placed_items:Array=[]
+var placed_serial:=0
+
 const MAX_WEIGHT := 24.0
 const ITEMS := {
  "knife":{"name":"巡林小刀","weight":.25,"description":"切取鹿肉与修补工具。近身自卫，伤害有限。"},
@@ -68,7 +75,7 @@ var chapter:Dictionary = Chapter.fresh()
 var items := {"wood":2,"food":2,"water":1}
 var collected: Array = []
 var discovered: Array = []
-var fires := {"home":0.0,"station":0.0,"hunters":0.0}
+var fires := {"home":0.0,"station":0.0,"hunters":0.0,"lodge":0.0}
 var upgrades := {"insulation":false,"bed":false,"storage":false}
 var storage := {}
 var structures: Array = []
@@ -115,7 +122,7 @@ func temperature_rate(shelter:String, windbreak:bool)->float:
 	if not shelter.is_empty():
 		if float(fires.get(shelter,0))>0:return 1.0
 		var loss:=.035+.04*storm()+.035*DayCycle.cold(elapsed)
-		return -loss*(.35 if shelter=="home" and upgrades.insulation else 1.0)
+		return -loss*(.35 if shelter=="home" and upgrades.insulation else float(Arrival.SITES.get(shelter,{}).get("loss",1.0)))
 	return -(.10+.26*storm()+.08*DayCycle.cold(elapsed))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)*clampf(1.0+(50.0-kit.warmth())/70.0,.55,1.65)*(1.0-kit.windproof()*.35)
 
 func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> void:
@@ -263,6 +270,7 @@ func discard(id: String) -> String:
 func rest_problem(shelter:String, hours:int=2)->String:
 	if hours not in [1,2,4]:return "请选择 1、2 或 4 小时。"
 	if health<=0:return "无法继续休息。"
+	if Arrival.SITES.has(shelter) and not Arrival.SITES[shelter].bed:return "这里没有卧铺，也没有炉子；只适合短暂避风。"
 	if shelter.is_empty() or not fires.has(shelter):return "需要在庇护所休息。"
 	if shelter=="home" and not upgrades.bed:return "先修复小屋里的保暖床铺。"
 	if temperature<30 and float(fires.get(shelter,0))<=0:return "太冷了，先把火点起来。"
@@ -304,9 +312,10 @@ func repair() -> bool:
 	return true
 
 func data() -> Dictionary:
-	return {"schema":6,"weather_profile":weather_profile,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
+	return {"schema":7,"arrival_journey":arrival_journey,"supply_taken":supply_taken.duplicate(true),"placed_items":placed_items.duplicate(true),"placed_serial":placed_serial,"weather_profile":weather_profile,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
 
 func restore(d: Dictionary) -> bool:
+	if not ArrivalState.valid(d):return false
 	var weather:Variant=d.get("weather_profile",0)
 	if not (weather is int or weather is float) or (float(weather)!=0.0 and float(weather)!=1.0):return false
 	if d.has("field_kit") and not Kit.valid(d.field_kit):return false
@@ -350,6 +359,10 @@ func restore(d: Dictionary) -> bool:
 	var tape = d.get("loaded_tape","")
 	if not tape is String or (not tape.is_empty() and not tape in ["tape_embers","tape_stride","tape_home"]): return false
 	if not d.get("music_playing",false) is bool: return false
+	arrival_journey=d.get("arrival_journey",false);supply_taken=d.get("supply_taken",{}).duplicate(true);placed_items=d.get("placed_items",[]).duplicate(true);placed_serial=int(d.get("placed_serial",0))
+	for source in supply_taken:
+		for item in supply_taken[source]:supply_taken[source][item]=int(supply_taken[source][item])
+	for entry in placed_items:entry.id=int(entry.id)
 	weather_profile=int(weather)
 	kit=Kit.new()
 	if d.has("field_kit"):kit.restore(d.field_kit)
@@ -362,7 +375,7 @@ func restore(d: Dictionary) -> bool:
 	completed=d.completed;items={};collected=d.collected.duplicate()
 	for key in inv:items[key]=int(inv[key])
 	discovered=d.get("discovered",[]).duplicate();structures=d.get("structures",[]).duplicate(true)
-	fires={"home":0.0,"station":0.0,"hunters":0.0}
+	fires={"home":0.0,"station":0.0,"hunters":0.0,"lodge":0.0}
 	upgrades={"insulation":false,"bed":false,"storage":false}
 	for key in d.fires: fires[key]=clampf(float(d.fires[key]),0,360)
 	for key in d.get("upgrades",{}): upgrades[key]=d.upgrades[key]

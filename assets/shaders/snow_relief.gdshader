@@ -20,7 +20,7 @@ float noise(vec2 p){
 }
 // Samples are at half-metre world coordinates, including both end points.
 // Map to texel centres, not the texture edges (the old mapping shifted slopes).
-vec2 field_uv(vec2 p){return ((p-vec2(-110,-225))*2.0+.5)/vec2(441,581);}
+vec2 field_uv(vec2 p){return ((p-vec2(-110,-225))*2.0+.5)/vec2(441,761);}
 float base_height(vec2 p){return textureLod(height_field,field_uv(p),0.0).r;}
 float patch_weight(vec2 p){vec2 d=abs(p-patch_center);return 1.0-smoothstep(10.0,11.9,max(d.x,d.y));}
 float track_depth(vec2 p){vec2 uv=(p-patch_center)/24.0+.5;return textureLod(tracks,clamp(uv,vec2(.001),vec2(.999)),0.0).r*patch_weight(p);}
@@ -58,7 +58,7 @@ void fragment(){
  float pressed=local_patch?max(track_depth(p),0.0):0.0;
  // Both mesh resolutions share per-pixel normals. Fine grain stays in the
  // material; adding geometric bands made the snow look like rectangular slabs.
- float e=.065;
+ float e=mix(.065,.65,smoothstep(115.0,121.0,wp.z)*smoothstep(.45,2.0,base_height(p)));
  vec3 n=vec3(normal_height(p-vec2(e,0))-normal_height(p+vec2(e,0)),2.0*e,normal_height(p-vec2(0,e))-normal_height(p+vec2(0,e)));
  float ripple=cos(dot(p,vec2(3.1,1.4))+drift*7.0)*.004;
  n.xz+=vec2(ripple,ripple*.45)*(1.0-ice)*(1.0-smoothstep(.003,.03,pressed));
@@ -82,6 +82,16 @@ void fragment(){
  AO_LIGHT_AFFECT=0.0;
  ROUGHNESS=mix(.80,.96,grain);
  SPECULAR=.12;
+ // Exposed mountain shoulders use the same height normals as their collision.
+ // Northern snow and tracked walking corridors keep their existing shading.
+ float mountain=smoothstep(115.0,121.0,wp.z);
+ float strata=noise(vec2(p.x*.62+wp.y*.51,p.y*.74-wp.y*.35));
+ float exposed=(1.0-smoothstep(.57,.86,n.y+(strata-.5)*.42))*mountain;
+ float fracture=noise(vec2(p.x*2.3+wp.y*.85,p.y*1.7-wp.y*.65));
+ float fleck=texture(powder_roughness,vec2(p.x+wp.y*.4,p.y)*.75).r;
+ vec3 stone=mix(vec3(.18,.225,.25),vec3(.39,.425,.44),strata*.35+fracture*.5+fleck*.15);
+ ALBEDO=mix(ALBEDO,stone,exposed);
+ ROUGHNESS=mix(ROUGHNESS,.94,exposed);
  if(ice>.001){
  float veins=pow(1.0-abs(sin(p.x*.63+p.y*.24+noise(p*.24)*2.0)),22.0);
  float frost=smoothstep(.54,.77,noise(p*.45))*.35;

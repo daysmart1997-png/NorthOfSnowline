@@ -37,7 +37,8 @@ func mesh_bounds(root:Node3D)->AABB:
  return result
 
 func check_buildings()->void:
- start_new();await frames()
+ start_new();player.position=Vector3(0,world.terrain_height(0,38)+.2,38);player.velocity=Vector3.ZERO;await frames()
+ # This suite isolates the existing buildings; arrival_check covers the new spawn route.
  var home:Node3D=world.buildings.home;var station:Node3D=world.buildings.station
  assert(home.scene_file_path.ends_with("cabin_lived.glb") and station.scene_file_path.ends_with("station_workshop.glb"))
  assert(home.find_child("HomeBedding",true,false)!=null and home.find_child("KitchenChair",true,false)!=null)

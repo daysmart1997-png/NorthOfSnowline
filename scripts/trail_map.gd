@@ -6,7 +6,7 @@ var discoveries:Array=[]
 var camps:Array=[]
 
 func map_point(v: Vector2) -> Vector2:
-	return Vector2(175 + v.x * 1.25, 375 + v.y * 1.65)
+	return Vector2(185 + v.x * 1.2, 55 + (v.y+214) * 1.02)
 
 func _draw() -> void:
 	draw_style_box(panel_style(), Rect2(Vector2.ZERO, size))
@@ -28,12 +28,15 @@ func _draw() -> void:
 	draw_polyline(route, Color("83959f"), 2)
 	draw_line(map_point(Vector2(-90, -86)), map_point(Vector2(90, -86)), Color("405e70"), 7)
 	draw_line(map_point(Vector2(0,-76.7)),map_point(Vector2(0,-95.3)),Color("725f49"),4)
-	for marker in [[Vector2(0, 18), "护林小屋"], [Vector2(0, -170), "北岭车站"]]:
+	for marker in [[Vector2(0,18),"护林小屋"],[Vector2(0,-170),"北岭车站"]]:
+		if marker[1]=="护林小屋" and not discoveries.has("home_reached") and not discoveries.has("lodge_route") and not discoveries.has("home"):continue
+		if marker[1]=="北岭车站" and not discoveries.has("home_log") and not discoveries.has("station"):continue
 		var p := map_point(marker[0])
 		draw_rect(Rect2(p - Vector2(5, 5), Vector2(10, 10)), Color("d7b879"))
 		draw_string(font, p + Vector2(-115, 5), marker[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("edf0ec"))
-	draw_string(font, Vector2(218, 218), "避风林道", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("b8c3c7"))
-	for marker in [["wreck",Vector2(-14,-43),"邮递车"],["hunters",Vector2(22,-62),"猎人营地"],["lookout",Vector2(28,-115),"观测点"],["depot",Vector2(-15,-128),"堆场"],["ridge",Vector2(-34,-36),"西岭"],["hollow",Vector2(40,-43),"洼地"],["lake",Vector2(-28,-89),"冻湖"]]:
+	draw_string(font, Vector2(232, 220), "避风林道", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("b8c3c7"))
+	var approach:=PackedVector2Array([map_point(Vector2(0,138)),map_point(Vector2(0,115)),map_point(Vector2(12,115)),map_point(Vector2(0,99)),map_point(Vector2(-11,82)),map_point(Vector2(0,60)),map_point(Vector2(0,27))]);draw_polyline(approach,Color("83959f"),1.5)
+	for marker in [["gatehouse",Vector2(12,109),"岗亭 · 无炉"],["lodge",Vector2(-11,73),"木屋 · 有炉"],["wreck",Vector2(-14,-43),"邮递车"],["hunters",Vector2(22,-62),"猎人营地"],["lookout",Vector2(28,-115),"观测点"],["depot",Vector2(-15,-128),"堆场"],["ridge",Vector2(-34,-36),"西岭"],["hollow",Vector2(40,-43),"洼地"],["lake",Vector2(-28,-89),"冻湖"]]:
 		if discoveries.has(marker[0]):
 			var at:=map_point(marker[1]);draw_circle(at,3,Color("74664f"));draw_string(font,at+Vector2(7,5),marker[2],HORIZONTAL_ALIGNMENT_LEFT,-1,14,Color("b8c3c7"))
 	for camp in camps:
@@ -42,7 +45,7 @@ func _draw() -> void:
 	draw_circle(p, 8, Color("17232b"))
 	draw_circle(p, 5, Color("d7b879"))
 	draw_string(font, Vector2(22, 448), "等高线：高地   蓝灰：冻湖   金点：你", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
-	draw_string(font, Vector2(22, 475), "沿旧铁路向北                    Tab 收起", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
+	draw_string(font, Vector2(22, 475), "搜寻落脚点，准备后再向北                    Tab 收起", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
 
 func panel_style() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()

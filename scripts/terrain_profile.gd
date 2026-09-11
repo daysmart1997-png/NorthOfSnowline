@@ -16,14 +16,27 @@ static func pad_mask(x:float,z:float)->float:
 	var shoulder:=.7*sin(z*.09)+.35*sin(z*.23+x*.17)
 	var road:=smoothstep(3.2,9.8+shoulder,absf(x))
 	var east:=smoothstep(1.8,6.8,absf(x-22-.65*sin(z*.08)))
-	return home*road*east
+	var arrival_pads:=smoothstep(5,9,Vector2(x-12,z-109).length())*smoothstep(5,9,Vector2(x+11,z-73).length())
+	return home*road*east*arrival_pads
 
 static func bedrock(x:float,z:float)->float:
 	var ridge:=6.3*mound(x,z,-34,-36,22,28)+9.0*mound(x,z,45,-137,23,32)+4.6*mound(x,z,-56,-158,31,24)
 	var hollows:=-2.3*mound(x,z,40,-43,16,22)-2.2*mound(x,z,-47,-111,20,19)
 	var rolling:=(.42*sin(x*.071+z*.039)+.28*sin(z*.099-x*.024))*pad_mask(x,z)
-	var land:=(ridge+hollows)*pad_mask(x,z)+rolling
+	var land:=(ridge+hollows)*pad_mask(x,z)+rolling+mountain_pass_height(x,z)
 	return lerpf(land,-1.65,lake_weight(x,z))
+
+static func mountain_pass_height(x:float,z:float)->float:
+	if z<=115:return 0.0
+	# Unequal shoulders, a curved low passage, and a distant saddle; not a rock barricade.
+	var left:=10.5*mound(x,z,-12,134,8.5,16)
+	var right:=5.8*mound(x,z,21,141,10,14)
+	var saddle:=7.0*mound(x,z,-5,153,14,7)
+	var center:=3.5*sin((z-118)*.13)
+	var path:=smoothstep(3.6,9.2,absf(x-center))
+	var facets:=.87+.08*sin(x*.41+z*.13)+.05*cos(z*.57-x*.21)
+	var shelves:=.24*sin(x*1.17+z*.28)*cos(z*.81-x*.34)
+	return maxf(0,(left+right+saddle)*facets+shelves)*path*smoothstep(115,121,z)
 
 static func slope(x:float,z:float)->float:
 	var dx:=(bedrock(x+.5,z)-bedrock(x-.5,z))

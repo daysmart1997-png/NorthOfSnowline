@@ -5,6 +5,8 @@ var buildings:Dictionary={}
 var last_sole:Dictionary={}
 var building_materials:Dictionary={}
 var biome_texture:ImageTexture
+var arrival
+const Arrival=preload("res://scripts/arrival_catalog.gd")
 
 func terrain_height(x:float,z:float)->float:return Terrain.height(x,z)
 func snow_depth(at:Vector3)->float:return Terrain.snow(at.x,at.z)
@@ -32,11 +34,14 @@ func travel_factor(at:Vector3,motion:Vector3)->float:
 	return clampf(1-depth*.38-uphill*.26,.62,1)
 
 func shelter_at(at:Vector3)->String:
+	for id in Arrival.SITES:
+		var d:Dictionary=Arrival.SITES[id]
+		if absf(at.x-d.at.x)<d.half_width-.12 and absf(at.z-d.at.z)<d.half_depth-.10:return id
 	if absf(at.x)<float(BuildingLayouts.DATA.station.half_width)-.2 and absf(at.z+170)<3.8:return "station"
 	return super.shelter_at(at)
 
 func surface_at(at:Vector3)->String:
-	if shelter_at(at) in ["home","station"]:return "wood"
+	if shelter_at(at) in ["home","station","gatehouse","lodge"]:return "wood"
 	if absf(at.x)<1.5 and ((at.z>22 and at.z<25.0) or (at.z> -166 and at.z< -163)):return "wood"
 	if absf(at.x)<2.4 and absf(at.z+86)<9.3:return "wood"
 	if Terrain.lake_weight(at.x,at.z)>.8:return "ice"
@@ -75,7 +80,8 @@ func _ready()->void:
 	rng.state=saved_rng_state
 	add_cabin_dressing()
 	apply_building_materials(get_node("PostalVan"))
-	var closed_road=preload("res://scripts/south_pass.gd").new();add_child(closed_road);closed_road.build(self)
+	var pass_scene=preload("res://scripts/mountain_pass.gd").new();add_child(pass_scene);pass_scene.build(self)
+	arrival=preload("res://scripts/arrival_world.gd").new();add_child(arrival);arrival.build(self)
 
 func add_cabin_dressing()->void:
 	var placements:=[
@@ -93,8 +99,8 @@ func add_cabin_dressing()->void:
 func build_terrain()->void:
 	super.build_terrain()
 	detail_mesh.custom_aabb=AABB(Vector3(-12,-5,-12),Vector3(24,20,24))
-	var image:=Image.create(441,581,false,Image.FORMAT_RG8)
-	for z in range(581):
+	var image:=Image.create(441,761,false,Image.FORMAT_RG8)
+	for z in range(761):
 		for x in range(441):
 			var px:float=-110+x*.5;var pz:float=-225+z*.5
 			image.set_pixel(x,z,Color(Terrain.snow(px,pz)/.65,Terrain.lake_weight(px,pz),0))
@@ -227,6 +233,7 @@ func make_tent(at:Vector3,id:String,parent:Node3D)->void:
 func sync_buildings(state)->void:
 	super.sync_buildings(state)
 	for id in buildings:
+		if Arrival.SITES.has(id):continue
 		for pair in [["UpgradeBed","bed"],["StorageChest","storage"],["WindowRepairs","insulation"]]:
 			var node:Node3D=buildings[id].find_child(pair[0],true,false)
 			if node:node.visible=id=="home" and bool(state.upgrades[pair[1]])

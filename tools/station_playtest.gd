@@ -6,12 +6,16 @@ func _ready()->void:
 		demo_output="res://artifacts/chapter/route-"+("ridge" if OS.get_cmdline_user_args().has("--ridge-detour") else "direct")
 	if OS.get_cmdline_user_args().has("--flow-content"):
 		demo_output="res://artifacts/chapter-flow/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
+	if OS.get_cmdline_user_args().has("--arrival-route"):demo_output="res://artifacts/arrival/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
+	if OS.get_cmdline_user_args().has("--mountain-route"):demo_output="res://artifacts/mountain-pass/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
 	super._ready()
 
 func play_session()->void:
 	await chapter("风雪将至")
 	await observe(2)
 	new_button.pressed.emit();await observe(2);opening.finish();await observe(1)
+	if OS.get_cmdline_user_args().has("--arrival-route"):
+		if not await arrival_route():return
 	if not await walk_to(Vector2(0,27)):return
 	if not await walk_to(Vector2(0,20.5)):return
 	if not await walk_to(Vector2(-2.4,18.2)):return
@@ -131,3 +135,43 @@ func walk_to(at:Vector2,run:=false)->bool:
 		if not await press_button_with("使用一份"):return false
 		await close_inventory()
 	return reached
+
+func arrival_route()->bool:
+	for at in [Vector2(0,121),Vector2(12,118),Vector2(12,113),Vector2(12.4,108.2)]:
+		if not await walk_to(at):return false
+	if not await use_target("gate_desk"):return false
+	for item in ["food","water","cloth"]:
+		var button:Button=backpack.find_child("Inspect_"+item,true,false)
+		button.pressed.emit();await observe(.3)
+		backpack.find_child("TakeSupply",true,false).pressed.emit();await observe(.4)
+	await chapter("岗亭翻找 · 只带走需要的食水")
+	if OS.get_cmdline_user_args().has("--mountain-route"):
+		backpack.tab="items";backpack.selected="food";backpack.refresh();await observe(.3)
+		if not await press_button_with("使用一份"):return false
+	backpack.tab="items";backpack.selected="water";backpack.refresh();await observe(.3)
+	if not await press_button_with("使用一份"):return false
+	await close_inventory()
+	if not await walk_to(Vector2(11.5,108.2)):return false
+	if not await use_target("gate_route"):return false
+	await close_inventory()
+	for at in [Vector2(12,110),Vector2(12,116),Vector2(0,103),Vector2(-11,84),Vector2(-11,78),Vector2(-11,74.8),Vector2(-9.5,75.35)]:
+		if not await walk_to(at):return false
+	if not await use_target("lodge_stores"):return false
+	for item in ["wood","wood","wood","bandage","battery"]:
+		backpack.find_child("Inspect_"+item,true,false).pressed.emit();await observe(.2)
+		backpack.find_child("TakeSupply",true,false).pressed.emit();await observe(.3)
+	await close_inventory()
+	for at in [Vector2(-11,75.2),Vector2(-11,72),Vector2(-9.6,71.8)]:
+		if not await walk_to(at):return false
+	if not await use_target("lodge"):return false
+	backpack.tab="craft";backpack.rest_hours=1;toggle_backpack();await observe(.5)
+	if not await press_button_with("休息 1 小时"):return false
+	await chapter("临时木屋 · 添柴、估算并正常休息")
+	await close_inventory()
+	if not await walk_to(Vector2(-10.9,71.0)):return false
+	if not await use_target("lodge_route"):return false
+	await close_inventory()
+	for at in [Vector2(-11,74.8),Vector2(-11,79),Vector2(0,61),Vector2(0,43)]:
+		if not await walk_to(at):return false
+	await chapter("找到长期据点前 · 沿路线纸寻找护林小屋")
+	return true

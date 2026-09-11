@@ -9,7 +9,8 @@ func _ready()->void:
 func check_buildings()->void:
  save_path="res://artifacts/chapter-flow/state.json"
  DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://artifacts/chapter-flow"))
- start_new();await frames()
+ start_new();player.position=Vector3(0,world.terrain_height(0,38)+.2,38);player.velocity=Vector3.ZERO;await frames()
+ # This suite isolates the existing buildings; arrival_check covers the new spawn route.
  await walk_to(Vector2(0,27));await walk_to(Vector2(0,20));await walk_to(Vector2(-3.2,18.2))
  update_target();assert(target.get("id")=="departure_trace",str(target))
  interact();await frames(70);assert(story_panel.visible and story_panel.scene_kind=="departure")

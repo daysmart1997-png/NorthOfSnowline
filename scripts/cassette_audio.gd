@@ -5,6 +5,7 @@ var cue_seconds:=12.0
 var alert_seconds:=0.0
 var wind_filter:AudioEffectLowPassFilter
 var fire_distance:=0.0
+var room_id:=""
 var speaker:AudioStreamPlayer
 var current_tape:=""
 var wind:AudioStreamPlayer
@@ -77,9 +78,10 @@ func sync(state,paused:bool,outside:=true,speed:=0.0,burning:=false,simulating:=
 	for voice in step_voices:voice.stream_paused=paused or not simulating
 	breathing.stream_paused=paused or not simulating
 	var wind_target:float=(-21.0+state.storm()*5.0) if outside else -35.0
+	if room_id=="gatehouse" and not outside:wind_target=-28+state.storm()*3
 	if reading:wind_target-=5.0
 	wind.volume_db=lerpf(wind.volume_db,wind_target,minf(delta*2,1))
-	wind_filter.cutoff_hz=lerpf(wind_filter.cutoff_hz,11000.0 if outside else 900.0,minf(delta*3,1))
+	wind_filter.cutoff_hz=lerpf(wind_filter.cutoff_hz,11000.0 if outside else (3400.0 if room_id=="gatehouse" else 900.0),minf(delta*3,1))
 	if simulating and not paused:alert_seconds=maxf(0,alert_seconds-delta)
 	var fire_target:float=-18.0-clampf(fire_distance-1.5,0,8)*1.6 if burning else -80.0
 	if reading:fire_target-=4.0

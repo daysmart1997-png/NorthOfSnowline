@@ -59,13 +59,13 @@ static func advice(s,shelter:String)->Dictionary:
  if s.thirst<20:return {"id":"thirst","text":"缺水影响恢复和步速 · B → 随身物品 → 饮用水；有炉火可融雪。"}
  if s.kit.has_condition("sprain"):return {"id":"sprain","text":"扭伤正在拖慢脚步 · 减轻负重，在人物身体页用夹板处理。"}
  if s.hunger<20:return {"id":"hunger","text":"饥饿影响恢复和步速 · 先吃随身口粮，暂缓可选的高地绕行。"}
- if not shelter.is_empty() and s.kit.owned[s.kit.equipped.feet].wet>25:return {"id":"wet","text":"湿靴会带走热量 · 点燃炉火后，B → 人物 → 双脚，烘干衣物。"}
+ if not shelter.is_empty() and s.fires.has(shelter) and s.kit.owned[s.kit.equipped.feet].wet>25:return {"id":"wet","text":"湿靴会带走热量 · 点燃炉火后，B → 人物 → 双脚，烘干衣物。"}
  if s.thirst<35 and s.elapsed<90:return {"id":"first_water","text":"背包里有应急饮水 · B → 随身物品 → 饮用水 → 使用一份。"}
  return {}
 
 func safe_to_save(room:String)->bool:
  var s=game.survival
- if room not in ["home","station"] or s.health<55 or s.temperature<35 or s.thirst<15 or s.hunger<10:return false
+ if room not in ["home","station","lodge"] or s.health<55 or s.temperature<35 or s.thirst<15 or s.hunger<10:return false
  if float(s.fires.get(room,0))<12 or not game.field.job.is_empty():return false
  for animal in game.field.animals:
   if animal.hp>0 and animal.species in ["wolf","bear"] and animal.alert>.6 and animal.position.distance_to(game.player.position)<20:return false

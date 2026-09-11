@@ -1,9 +1,9 @@
 extends CanvasLayer
 # Three quiet establishing shots. Survival is frozen; every card is skippable.
 const CARDS := [
-	["昨夜 / 北岭", "山崩截断了下山公路。\n谷口仍有人守听，但你的平安报没能发出去。", Vector3(0,0,44)],
-	["未归的搭档", "周岑，呼号北岭四，前往北坡检查信标。\n约好的傍晚过去了，他没有回报。", Vector3(0,0,-170)],
-	["第一章 / 失联", "连夜赶路，靴子已经湿透，你又冷又渴。\n七号小屋就在前方。先暖身、喝水，再查看无线电。", Vector3(0,0,18)]
+	["清晨 / 北岭山口", "你在风雪里走了一夜，终于穿过山口。\n最后一份口粮已经吃完，谷口还没有收到你的平安报。", Vector3(-7,3,134)],
+	["未归的搭档", "周岑，呼号北岭四，前往北坡检查信标。\n约好的傍晚过去了，他没有回报。", Vector3(-10,4,137)],
+	["第一章 / 失联", "湿靴正在带走热量。山路往低处延伸。\n先找到食物和能避风的地方，再想办法恢复通信。", Vector3(0,0,130)]
 ]
 var game
 var camera:Camera3D
@@ -42,9 +42,8 @@ func _process(delta:float)->void:
 	var t:float=smoothstep(0,6,clock)
 	var focus:Vector3=CARDS[page][2]+Vector3(0,.8,0)
 	camera.position=focus+Vector3(15,23,21);camera.look_at(focus)
-	camera.size=lerpf(24 if page==0 else 29,20 if page==0 else 24,t)
-	# The player remains indoors during these exterior shots. Restore exterior
-	# sunlight for the shot; InteriorView restores room lighting on return.
+	camera.size=lerpf(38 if page==0 else 29,31 if page==0 else 24,t)
+	# Establishing shots show exterior light; InteriorView resumes control on return.
 	game.world.sun.light_cull_mask=0xfffff;game.world.night_fill.light_cull_mask=0xfffff
 	game.world.sun.shadow_enabled=game.world.sun.light_energy>.015
 	game.world.snow.global_position=focus+Vector3(0,7,0);game.world.snow.visible=true
@@ -62,7 +61,7 @@ func finish()->void:
 	if not sheet.visible:return
 	set_process(false);sheet.visible=false;game.player.camera.current=true;game.canvas.visible=true
 	game.set_menu(false);game.interior_view.update()
-	game.notify("七号小屋 · 靠近桌上无线电按 E，查看值守记录。")
+	game.notify("沿山口向低处寻找人类活动的痕迹 · 靠近物品按 E，B 查看行囊。")
 
 func _input(event:InputEvent)->void:
 	if sheet.visible and event.is_action_pressed("pause_game"):

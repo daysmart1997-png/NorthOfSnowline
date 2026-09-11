@@ -54,19 +54,19 @@ func sync_buildings(state)->void:
 	super.sync_buildings(state)
 
 func build_terrain()->void:
-	var image:=Image.create(441,581,false,Image.FORMAT_RF)
-	for z in range(581):
+	var image:=Image.create(441,761,false,Image.FORMAT_RF)
+	for z in range(761):
 		for x in range(441):image.set_pixel(x,z,Color(terrain_height(-110+x*.5,-225+z*.5),0,0))
 	height_texture=ImageTexture.create_from_image(image)
 	var vertices:=PackedVector3Array();var normals:=PackedVector3Array();var indices:=PackedInt32Array()
-	for z in range(291):
+	for z in range(381):
 		for x in range(221):
 			var h:=image.get_pixel(x*2,z*2).r
 			vertices.append(Vector3(-110+x,h,-225+z))
 			var dx:=image.get_pixel(maxi(0,x*2-1),z*2).r-image.get_pixel(mini(440,x*2+1),z*2).r
-			var dz:=image.get_pixel(x*2,maxi(0,z*2-1)).r-image.get_pixel(x*2,mini(580,z*2+1)).r
+			var dz:=image.get_pixel(x*2,maxi(0,z*2-1)).r-image.get_pixel(x*2,mini(760,z*2+1)).r
 			normals.append(Vector3(dx,1,dz).normalized())
-			if x<220 and z<290:
+			if x<220 and z<380:
 				var a:=z*221+x
 				indices.append_array(PackedInt32Array([a,a+1,a+221,a+1,a+222,a+221]))
 	var arrays:=[];arrays.resize(Mesh.ARRAY_MAX);arrays[Mesh.ARRAY_VERTEX]=vertices;arrays[Mesh.ARRAY_NORMAL]=normals;arrays[Mesh.ARRAY_INDEX]=indices

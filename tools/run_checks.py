@@ -8,6 +8,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "lodge": (["--fixed-fps", "60", "--quit-after", "12000", "tools/lodge_check.tscn", "--", "--isolated-settings"], "LODGE_CHECK_OK"),
+    "mountain": (["--fixed-fps", "60", "--quit-after", "12000", "tools/mountain_check.tscn", "--", "--isolated-settings"], "MOUNTAIN_CHECK_OK"),
+    "arrival_presentation": (["--fixed-fps", "60", "--quit-after", "6000", "tools/arrival_presentation.tscn", "--", "--isolated-settings"], "ARRIVAL_PRESENTATION_OK"),
+    "arrival": (["--fixed-fps", "60", "--quit-after", "30000", "tools/arrival_check.tscn", "--", "--isolated-settings"], "ARRIVAL_CHECK_OK"),
     "chapter_flow": (["--fixed-fps", "60", "--quit-after", "9000", "tools/chapter_flow_check.tscn", "--", "--isolated-settings"], "CHAPTER_FLOW_OK"),
     "building": (["--fixed-fps", "60", "--quit-after", "12000", "tools/building_check.tscn", "--", "--isolated-settings"], "BUILDING_CHECK_OK"),
     "chapter_polish": (["--fixed-fps", "60", "--quit-after", "1800", "tools/chapter_polish_check.tscn", "--", "--isolated-settings"], "CHAPTER_POLISH_OK"),
