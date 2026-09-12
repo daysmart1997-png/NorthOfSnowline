@@ -87,9 +87,9 @@ func refresh()->void:
 	for child in content.get_children():content.remove_child(child);child.queue_free()
 	if feedback.text.is_empty() or feedback.text in TAB_HINTS.values():feedback.text=TAB_HINTS[tab]
 	var s=game.survival
-	status.text="健康 %d    体温 %d    体力 %d    ·    负重 %.1f / 24 kg    ·    饱食 %d    水分 %d    精力 %d    ·    第 %d 天 %s / 已暂停"%[s.health,s.temperature,s.stamina,s.weight(),s.hunger,s.thirst,s.energy,Rules.DayCycle.day(s.elapsed),Rules.DayCycle.clock_text(s.elapsed)]
-	status.text+="\n%s · 室外 %d°C · %s"%[Rules.DayCycle.phase(s.elapsed),roundi(s.outdoor_temperature()),game.world.terrain_name(game.player.position)]
-	if tab=="character":status.text="第 %d 天 %s · 室外 %d°C · 查看时已暂停"%[Rules.DayCycle.day(s.elapsed),Rules.DayCycle.clock_text(s.elapsed),roundi(s.outdoor_temperature())]
+	status.text="健康 %d    体温 %d    体力 %d    ·    负重 %.1f / 24 kg    ·    饱食 %d    水分 %d    精力 %d    ·    第 %d 天 %s / 已暂停"%[s.health,s.temperature,s.stamina,s.weight(),s.hunger,s.thirst,s.energy,Rules.DayCycle.day(s.solar_time()),Rules.DayCycle.clock_text(s.solar_time())]
+	status.text+="\n%s · 室外 %d°C · %s"%[Rules.DayCycle.phase(s.solar_time()),roundi(s.outdoor_temperature()),game.world.terrain_name(game.player.position)]
+	if tab=="character":status.text="第 %d 天 %s · 室外 %d°C · 查看时已暂停"%[Rules.DayCycle.day(s.solar_time()),Rules.DayCycle.clock_text(s.solar_time()),roundi(s.outdoor_temperature())]
 	weight_bar.visible=tab!="character"
 	weight_bar.value=s.weight();category_bar.visible=tab=="items"
 	for id in tab_buttons:
@@ -137,7 +137,7 @@ func refresh()->void:
 			var problem:String=s.recipe_problem(id,shelter,valid)
 			var button=game.button(Rules.RECIPES[id].name+"\n"+" · ".join(cost)+("\n"+problem if not problem.is_empty() else ""),func():do_action("craft",recipe),left)
 			button.name="Recipe_"+id;button.disabled=not problem.is_empty();button.tooltip_text=problem;button.add_theme_font_size_override("font_size",14)
-		right.add_child(game.label("临时休整" if shelter in ["gatehouse","lodge"] else "把这里变成一个家",24,Palette.INK))
+		right.add_child(game.label("临时休整" if Rules.Arrival.SITES.has(shelter) else "把这里变成一个家",24,Palette.INK))
 		var description:Label=game.label(Rules.Arrival.SITES[shelter].description if Rules.Arrival.SITES.has(shelter) else "封窗减缓失温，炉火才能回暖。\n修好床铺，为下一次出发养足精神。",15);description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(description)
 		build_rest_controls(right,s)
 	else:
@@ -170,12 +170,24 @@ func build_rest_controls(right:VBoxContainer,s)->void:
 	var preview:Dictionary=s.rest_preview(game.world.shelter_at(game.player.position),rest_hours)
 	var text:String=preview.problem
 	if text.is_empty():
-		text="醒来约 %s  ·  精力 +%d\n饱食 −%.1f  /  水分 −%.1f\n预计体温 %d  ·  炉火余 %d 分钟"%[preview.clock,roundi(preview.energy_gain),preview.hunger_cost,preview.thirst_cost,roundi(preview.temperature),floori(preview.fire_minutes)]
-		if not preview.reason.is_empty():text+="\n"+preview.reason+"，可能提前醒来。"
-		elif preview.fire_short:text+="\n炉火撑不到醒来；封窗只能减缓失温。"
-	var forecast:Label=game.label(text,14,Palette.ACCENT if preview.get("fire_short",false) else Palette.MUTED)
+		text="预计第 %d 天 %s 醒来 · 精力 +%d\n醒来饱食 %d / 水分 %d / 体温 %d\n本次消耗：饱食 %.1f · 水分 %.1f"%[preview.wake_day,preview.clock,roundi(preview.energy_gain),roundi(preview.hunger),roundi(preview.thirst),roundi(preview.temperature),preview.hunger_cost,preview.thirst_cost]
+		text+="\n炉火约第 %d 天 %s 熄灭"%[preview.fire_day,preview.fire_until] if float(s.fires.get(game.world.shelter_at(game.player.position),0))>0 else "\n炉子尚未点燃，屋内只能挡风"
+		if preview.fire_short:text+="\n覆盖所选时长还需 %d 根柴 · 随身 %d"%[preview.extra_wood,s.wood]
+		if game.world.shelter_at(game.player.position)=="lodge" and s.discovered.has("lodge_board_removed"):text+="\n挡风板已拆：回暖更慢，熄火后失温更快。"
+		if not preview.reason.is_empty():text+="\n"+preview.reason+"，预计只能休息 %d 分钟。"%preview.minutes
+		elif preview.hunger<20 or preview.thirst<20:text+="\n醒来时食水偏低，建议先吃喝再睡。"
+	var warning:bool=not preview.get("reason","").is_empty() or float(preview.get("hunger",100))<20 or float(preview.get("thirst",100))<20
+	var forecast:Label=game.label(text,14,Palette.DANGER if warning else (Palette.ACCENT if preview.get("fire_short",false) else Palette.MUTED))
 	forecast.name="RestForecast";forecast.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;right.add_child(forecast)
-	var rest_button=game.button("休息 %d 小时"%rest_hours,func():do_action("rest",str(rest_hours)),right)
+	var prepare:=HBoxContainer.new();right.add_child(prepare)
+	for item in ["food","water"]:
+		var id:String=item
+		var quick=game.button(("吃口粮" if id=="food" else "喝水")+" · %d"%s.count(id),func():do_action("use",id),prepare)
+		quick.name="RestPrepare_"+id;quick.custom_minimum_size=Vector2(124,38);quick.disabled=s.count(id)<=0
+		quick.tooltip_text="随身剩余 %d 份"%s.count(id)
+	var rest_button=game.button("休息 %d 小时"%rest_hours,func():do_action("rest",str(rest_hours)),prepare)
+	rest_button.custom_minimum_size=Vector2(150,38)
+	rest_button.add_theme_stylebox_override("normal",game.style(Palette.RAISED,Palette.ACCENT))
 	rest_button.disabled=not preview.problem.is_empty()
 
 func item_details(right:VBoxContainer,s)->void:
@@ -186,6 +198,8 @@ func item_details(right:VBoxContainer,s)->void:
 	var usable:=selected in ["food","water","tea","bandage","battery","player","medicine","splint","cooked_meat","raw_meat","knife","bow","rifle"] or Rules.Kit.GEAR.has(selected) or selected.begins_with("tape_")
 	if selected=="tape_home" and s.count("tape_home")>0:
 		game.button("展开周岑留下的内页",func():game.open_story("tape_note"),right).name="TapeNote"
+	if selected=="tape_embers" and s.count("tape_embers")>0:
+		game.button("展开《余烬》盒内留言",func():game.open_story("embers_note"),right).name="EmbersNote"
 	if usable:
 		var use_button=game.button("装入磁带机" if selected.begins_with("tape_") else ("播放 / 停止" if selected=="player" else ("应急生食 · 会引起食物不适" if selected=="raw_meat" else "使用一份")),func():do_action("use",selected),right);use_button.disabled=s.count(selected)<=0
 	elif selected!="parts":game.button("查看制作配方",func():tab="craft";refresh(),right)

@@ -12,7 +12,9 @@ static func day(elapsed: float) -> int:
 	return int(floor((START_HOUR + elapsed * 24.0 / DAY_SECONDS) / 24.0)) + 1
 
 static func clock_text(elapsed: float) -> String:
-	var minutes := int(floor(hour(elapsed) * 60.0))
+	# Work in whole game minutes: converting through fractional hours can turn
+	# 00:10 into 00:09 through floating point rounding at midnight.
+	var minutes := posmod(int(floor(elapsed)) + int(START_HOUR * 60.0), 1440)
 	return "%02d:%02d" % [minutes / 60, minutes % 60]
 
 static func phase(elapsed: float) -> String:

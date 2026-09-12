@@ -14,8 +14,7 @@ var upgrades_signature := ""
 var structure_signature := ""
 var camp_positions:Dictionary = {}
 var camp_roofs:Dictionary = {}
-var fire_particles:Dictionary={}
-var flames:Array[MeshInstance3D]=[]
+var fire_effects:Dictionary={}
 
 func _ready()->void:
 	super._ready()
@@ -86,17 +85,9 @@ func make_tent(at:Vector3,id:String,parent:Node3D)->void:
 	add_flames(id)
 
 func add_flames(id:String)->void:
-	if fire_particles.has(id):return
-	var sparks:=CPUParticles3D.new();sparks.amount=22;sparks.lifetime=.85
-	sparks.emission_shape=CPUParticles3D.EMISSION_SHAPE_SPHERE;sparks.emission_sphere_radius=.16
-	sparks.direction=Vector3.UP;sparks.spread=12;sparks.gravity=Vector3(0,.2,0)
-	sparks.initial_velocity_min=.35;sparks.initial_velocity_max=.8
-	sparks.scale_amount_min=.05;sparks.scale_amount_max=.13
-	var mesh:=SphereMesh.new();mesh.radius=.5;mesh.height=1.2;mesh.radial_segments=6;mesh.rings=3;sparks.mesh=mesh
-	var material:=StandardMaterial3D.new();material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;material.vertex_color_use_as_albedo=true;material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;sparks.material_override=material
-	var gradient:=Gradient.new();gradient.colors=PackedColorArray([Color(1,.65,.16,.9),Color(1,.3,.025,.8),Color(.5,.12,.015,0)]);gradient.offsets=PackedFloat32Array([0,.35,1]);sparks.color_ramp=gradient
-	var host:Node3D=fire_meshes[id].get_parent();host.add_child(sparks);sparks.position=fire_meshes[id].position-Vector3(0,.25,0)
-	sparks.emitting=false;fire_particles[id]=sparks
+	if fire_effects.has(id):return
+	var effect=preload("res://scripts/hearth_effect.gd").new()
+	effect.setup(id,fire_meshes[id],fire_lights[id],camp_positions.has(id));fire_effects[id]=effect
 
 func shelter_at(at:Vector3)->String:
 	var base:=super.shelter_at(at)
@@ -132,7 +123,7 @@ func sync_buildings(state)->void:
 		for node in structure_root.get_children():structure_root.remove_child(node);node.queue_free()
 		points=points.filter(func(p:Dictionary)->bool:return not str(p.id).begins_with("camp_"))
 		for id in camp_positions.keys():
-			if str(id).begins_with("camp_"):camp_positions.erase(id);camp_roofs.erase(id);fire_lights.erase(id);fire_meshes.erase(id);fire_particles.erase(id)
+			if str(id).begins_with("camp_"):camp_positions.erase(id);camp_roofs.erase(id);fire_lights.erase(id);fire_meshes.erase(id);fire_effects.erase(id)
 		for structure in state.structures:
 			var p:Array=structure.position
 			make_tent(Vector3(p[0],p[1],p[2]),structure.id,structure_root)
@@ -157,8 +148,4 @@ func weather_update(storm:float,at:Vector3,fires:Dictionary,elapsed:=0.0)->void:
 		if not all_fires.has(id):all_fires[id]=0.0
 	super.weather_update(storm,at,all_fires,elapsed)
 	for id in camp_roofs:camp_roofs[id].visible=shelter_at(at)!=id
-	for id in fire_particles:
-		var burning:bool=float(all_fires.get(id,0))>0
-		fire_particles[id].emitting=burning
-		if camp_positions.has(id):fire_meshes[id].visible=false
-		if burning:fire_lights[id].light_energy=1.8+sin(Time.get_ticks_msec()*.012)*.15
+	for id in fire_effects:fire_effects[id].sync(float(all_fires.get(id,0)),elapsed,storm)

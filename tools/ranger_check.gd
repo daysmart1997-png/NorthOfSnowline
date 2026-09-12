@@ -61,7 +61,17 @@ func check_ranger()->void:
 		inspection.cull_mask=interior_view.OUTDOOR_VIEW
 		inspection.position=Vector3(4,2.4,-2)
 		inspection.look_at(player.global_position+Vector3(0,.9,0));inspection.current=true
-	player.footfall.connect(func(surface:String,pressure:float,left:bool):contacts.append({"tick":tick,"left":left,"surface":surface,"pressure":pressure}))
+	player.footfall.connect(func(surface:String,pressure:float,left:bool):
+		var side:="L" if left else "R"
+		var actual:Vector3=player.skeleton.global_transform*player.skeleton.get_bone_global_pose(player.skeleton.find_bone("foot."+side)).origin
+		var ground:Vector3=player.ground_samples[side].at
+		assert(Vector2(actual.x,actual.z).distance_to(Vector2(ground.x,ground.z))<.001,"Footstep uses this frame's rendered foot, not last frame's sample")
+		assert(actual.y-ground.y<=.0751,"No print or sound while the foot is airborne")
+		if surface in ["snow","deep"] and absf(ground.y-world.terrain_height(ground.x,ground.z))<.18:
+			var mark:Dictionary=world.track_marks.back()
+			assert(Vector2(mark.at).distance_to(Vector2(actual.x,actual.z))<.001,"Snow indentation is under the contacting boot")
+		contacts.append({"tick":tick,"left":left,"surface":surface,"pressure":pressure,"clearance":actual.y-ground.y,"phase":player.contact_evidence.phase})
+	)
 	Input.action_press("move_up")
 	for i in range(390):
 		tick=i
@@ -83,6 +93,15 @@ func check_ranger()->void:
 	assert(player.position.z< -18,"Checks use actual movement, without disabling collisions")
 	assert(world.track_marks.size()>=8,"Refined gait continues to leave snow impressions")
 	assert(player.feet_modifier.adjustments>200,"Terrain fitting still runs with the refined skin")
+	# Keep the same geometry assertions while the body turns under running feet.
+	var before_turns:=contacts.size()
+	Input.action_press("sprint")
+	for direction in ["move_right","move_down","move_left"]:
+		Input.action_press(direction)
+		for i in range(65):tick+=1;await get_tree().physics_frame
+		Input.action_release(direction)
+	Input.action_release("sprint")
+	assert(contacts.size()>before_turns+3,"Running turns still produce grounded contacts")
 	print("RANGER_CONTACTS ",JSON.stringify(contacts))
 	active=false;player.enabled=false;set_process(false);cassette.shutdown();story_panel.shutdown_audio();backpack.shutdown_ui()
 	await get_tree().process_frame;await get_tree().process_frame;OS.delay_msec(100)

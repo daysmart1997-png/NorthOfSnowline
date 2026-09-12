@@ -8,6 +8,8 @@ func _ready()->void:
 		demo_output="res://artifacts/chapter-flow/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
 	if OS.get_cmdline_user_args().has("--arrival-route"):demo_output="res://artifacts/arrival/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
 	if OS.get_cmdline_user_args().has("--mountain-route"):demo_output="res://artifacts/mountain-pass/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
+	if OS.get_cmdline_user_args().has("--first-night-route"):demo_output="res://artifacts/settlement-polish/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
+	if OS.get_cmdline_user_args().has("--guidance-route"):demo_output="res://artifacts/return-guidance/route-"+("sheltered" if OS.get_cmdline_user_args().has("--sheltered-return") else "direct")
 	super._ready()
 
 func play_session()->void:
@@ -113,6 +115,8 @@ func play_session()->void:
 	for reply in ["call","report","confirm"]:
 		if not await story_click(reply):return
 	assert(survival.completed,"A physical station roundtrip must finish the radio objective")
+	if OS.get_cmdline_user_args().has("--guidance-route"):
+		assert(exploration.return_guidance.shown.has(0) and exploration.return_guidance.shown.has(1),"Both return junctions offer directions during normal travel")
 	await chapter("信号已发出 · 完成第一次往返")
 	await observe(5)
 	demo_finished=true;write_report("complete")
@@ -164,14 +168,55 @@ func arrival_route()->bool:
 	for at in [Vector2(-11,75.2),Vector2(-11,72),Vector2(-9.6,71.8)]:
 		if not await walk_to(at):return false
 	if not await use_target("lodge"):return false
-	backpack.tab="craft";backpack.rest_hours=1;toggle_backpack();await observe(.5)
-	if not await press_button_with("休息 1 小时"):return false
-	await chapter("临时木屋 · 添柴、估算并正常休息")
-	await close_inventory()
+	if OS.get_cmdline_user_args().has("--first-night-route"):
+		if not await settlement_night():return false
+	else:
+		backpack.tab="craft";backpack.rest_hours=1;toggle_backpack();await observe(.5)
+		if not await press_button_with("休息 1 小时"):return false
+		await chapter("临时木屋 · 添柴、估算并正常休息")
+		await close_inventory()
 	if not await walk_to(Vector2(-10.9,71.0)):return false
 	if not await use_target("lodge_route"):return false
 	await close_inventory()
-	for at in [Vector2(-11,74.8),Vector2(-11,79),Vector2(0,61),Vector2(0,43)]:
+	for at in [Vector2(-11,74.8),Vector2(-11,79),Vector2(-3,79),Vector2(-3,69),Vector2(0,61),Vector2(0,43)]:
 		if not await walk_to(at):return false
 	await chapter("找到长期据点前 · 沿路线纸寻找护林小屋")
+	return true
+
+func settlement_night()->bool:
+	for at in [Vector2(-11,74.8),Vector2(-11,83),Vector2(-2,85),Vector2(10,85),Vector2(10,80),Vector2(10,78),Vector2(10,76.8)]:
+		if not await walk_to(at):return false
+	if not await use_target("canteen_pantry"):return false
+	var light_pack:=OS.get_cmdline_user_args().has("--light-pack")
+	for item in (["food","water"] if light_pack else ["food","food","water"]):
+		backpack.find_child("Inspect_"+item,true,false).pressed.emit();await observe(.2)
+		backpack.find_child("TakeSupply",true,false).pressed.emit();await observe(.3)
+	await close_inventory();await chapter("夜间搜寻 · 伙房的有限口粮")
+	for at in [Vector2(10,79),Vector2(10,85),Vector2(-2,85),Vector2(-11,83),Vector2(-16,88),Vector2(-23,92),Vector2(-23,89),Vector2(-23,86.5)]:
+		if not await walk_to(at):return false
+	if not await use_target("shed_fuel"):return false
+	for i in range(3 if light_pack else 4):
+		backpack.find_child("Inspect_wood",true,false).pressed.emit();await observe(.2)
+		backpack.find_child("TakeSupply",true,false).pressed.emit();await observe(.3)
+	await close_inventory()
+	for at in [Vector2(-23,90),Vector2(-23,92),Vector2(-16,88),Vector2(-11,83),Vector2(-11,79),Vector2(-11,75),Vector2(-12.6,75.5)]:
+		if not await walk_to(at):return false
+	if not await use_target("wreck_player"):return false
+	await chapter("回到炉屋 · 留出后半夜的食物与燃料")
+	# Inspecting and eating stay in the preparation page; only normal rest skips time.
+	while DayCycle.day(survival.solar_time())<2 or DayCycle.hour(survival.solar_time())<7:
+		for at in [Vector2(-11,75.2),Vector2(-11,72),Vector2(-9.6,71.8)]:
+			if not await walk_to(at):return false
+		if survival.fires.lodge<125:
+			if not await use_target("lodge"):return false
+		backpack.tab="craft";backpack.rest_hours=2;toggle_backpack();await observe(.5)
+		if survival.hunger<48 and survival.count("food")>0:
+			if not await press_button_with("吃口粮"):return false
+		if survival.thirst<40 and survival.count("water")>0:
+			if not await press_button_with("喝水"):return false
+		var before:float=survival.elapsed
+		if not await press_button_with("休息 2 小时"):return false
+		if survival.elapsed<=before or survival.health<=0:fail_session("Overnight rest could not advance safely");return false
+		await close_inventory()
+	await chapter("第一晚之后 · 天亮再向北")
 	return true

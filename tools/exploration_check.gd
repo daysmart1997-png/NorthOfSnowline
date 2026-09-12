@@ -32,7 +32,7 @@ func check_exploration()->void:
 	assert(backpack.find_child("Recipe_bandage",true,false).disabled,"Missing materials are visible before clicking")
 	assert(backpack.find_child("Recipe_tea",true,false).disabled,"Unlit fire recipes are disabled")
 	backpack.rest_hours=4;backpack.refresh();await settle()
-	assert(backpack.find_child("RestForecast",true,false).text.contains("撑不到"),"Four-hour sleep warns about cold fire")
+	assert(backpack.find_child("RestForecast",true,false).text.contains("覆盖所选时长还需"),"Four-hour sleep shows missing fuel before committing")
 	assert(backpack.get_global_rect().end.y<=720,"Craft and rest fit the reference viewport")
 	for building in world.buildings.values():assert(building.find_children("*","Label3D",true,false).is_empty(),"Cabins have no name signs")
 	for poi in world.pois:

@@ -95,6 +95,8 @@ func _process(delta:float)->void:
   Chapter.discover(s,"zhou_gloves");game.notify("衣袋里有周岑的便笺 · 已收进探索手记")
  if s.count("tape_home")>0 and not s.discovered.has("tape_home_note"):
   Chapter.discover(s,"tape_home_note");game.notify("《归途》盒内夹着一页留言 · 行囊中可展开阅读")
+ if s.music_effect()=="tape_embers" and room=="lodge" and not s.discovered.has("embers_notice"):
+  s.discovered.append("embers_notice");game.notify("《余烬》的盒盖里有周岑的字。行囊中选中磁带，可以展开留言。")
  advice_wait-=delta
  if advice_wait<=0 and game.toast_time<=0:
   var hint:=advice(s,room)

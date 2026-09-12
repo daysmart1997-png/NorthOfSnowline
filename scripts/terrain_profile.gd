@@ -1,5 +1,6 @@
 extends RefCounted
 const CabinSnow=preload("res://scripts/cabin_snow_site.gd")
+const SettlementPaths=preload("res://scripts/settlement_paths.gd")
 
 static func mound(x:float,z:float,cx:float,cz:float,rx:float,rz:float)->float:
 	return exp(-pow((x-cx)/rx,2)-pow((z-cz)/rz,2))
@@ -17,6 +18,7 @@ static func pad_mask(x:float,z:float)->float:
 	var road:=smoothstep(3.2,9.8+shoulder,absf(x))
 	var east:=smoothstep(1.8,6.8,absf(x-22-.65*sin(z*.08)))
 	var arrival_pads:=smoothstep(5,9,Vector2(x-12,z-109).length())*smoothstep(5,9,Vector2(x+11,z-73).length())
+	for at in [Vector2(10,78),Vector2(-23,87),Vector2(12,59)]:arrival_pads*=smoothstep(5.5,9,Vector2(x,z).distance_to(at))
 	return home*road*east*arrival_pads
 
 static func bedrock(x:float,z:float)->float:
@@ -56,7 +58,7 @@ static func snow(x:float,z:float)->float:
 	# layer even where the bedrock mask is zero; cabin/bridge decks are excluded
 	# by the actual contact surface in World.surface_at().
 	var packed:=.045+.010*(sin(x*.43+z*.31)*.5+.5)
-	return clampf(lerpf(packed,thickness,pad_mask(x,z))+CabinSnow.accumulation(x,z),.02,.65)*(1-ice)
+	return clampf(SettlementPaths.snow_depth(x,z,lerpf(packed,thickness,pad_mask(x,z)))+CabinSnow.accumulation(x,z),.02,.65)*(1-ice)
 
 static func height(x:float,z:float)->float:
 	return bedrock(x,z)+snow(x,z)

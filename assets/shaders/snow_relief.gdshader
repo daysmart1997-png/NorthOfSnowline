@@ -1,13 +1,14 @@
 shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
+#include "res://assets/shaders/snow_detail.gdshaderinc"
 uniform sampler2D height_field : filter_linear, repeat_disable;
 uniform sampler2D tracks : filter_linear, repeat_disable;
 uniform sampler2D noise_field : filter_linear, repeat_enable;
 uniform sampler2D biomes : filter_linear, repeat_disable;
 uniform sampler2D powder_normal : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D powder_roughness : hint_default_white, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform float powder_world_size : hint_range(1.0,12.0) = 3.5;
-uniform float powder_strength : hint_range(0.0,1.0) = 0.22;
+uniform float powder_world_size : hint_range(1.0,12.0) = 2.8;
+uniform float powder_strength : hint_range(0.0,1.0) = 0.18;
 uniform vec3 snow_low = vec3(.43,.49,.54);
 uniform vec3 snow_high = vec3(.55,.61,.64);
 uniform vec2 patch_center=vec2(0.0);
@@ -25,7 +26,6 @@ float base_height(vec2 p){return textureLod(height_field,field_uv(p),0.0).r;}
 float patch_weight(vec2 p){vec2 d=abs(p-patch_center);return 1.0-smoothstep(10.0,11.9,max(d.x,d.y));}
 float track_depth(vec2 p){vec2 uv=(p-patch_center)/24.0+.5;return textureLod(tracks,clamp(uv,vec2(.001),vec2(.999)),0.0).r*patch_weight(p);}
 float height_at(vec2 p){return base_height(p)-(local_patch?track_depth(p):0.0);}
-float normal_height(vec2 p){return base_height(p)-(local_patch?track_depth(p)*.65:0.0);}
 float coarse_height(vec2 p){
  vec2 a=floor(p);vec2 f=fract(p);
  float h00=base_height(a);float h10=base_height(a+vec2(1,0));
@@ -53,19 +53,26 @@ void fragment(){
  // Slow world-space distortion breaks repeated dimples without changing
  // collision, accumulated snow depth, or the existing footprint field.
  vec2 powder_uv=p/powder_world_size+vec2(broad-.5,drift-.5)*.55;
- vec2 powder=texture(powder_normal,powder_uv).rg*2.0-1.0;
- float grain=texture(powder_roughness,powder_uv).r;
+ vec3 micro=snow_detail(powder_normal,powder_roughness,powder_uv,.30+broad*.40);
+ vec2 powder=micro.xy;
+ float grain=micro.z;
  float pressed=local_patch?max(track_depth(p),0.0):0.0;
  // Both mesh resolutions share per-pixel normals. Fine grain stays in the
  // material; adding geometric bands made the snow look like rectangular slabs.
- float e=mix(.065,.65,smoothstep(115.0,121.0,wp.z)*smoothstep(.45,2.0,base_height(p)));
- vec3 n=vec3(normal_height(p-vec2(e,0))-normal_height(p+vec2(e,0)),2.0*e,normal_height(p-vec2(0,e))-normal_height(p+vec2(0,e)));
+ // The height map is sampled every half metre. Differentiating at 6.5 cm
+ // exposed each bilinear cell at grazing sun angles. Smooth only the terrain
+ // gradient; boot cavities retain their independent fine normal sampling.
+ float e=mix(.50,.65,smoothstep(115.0,121.0,wp.z)*smoothstep(.45,2.0,base_height(p)));
+ vec3 n=vec3((base_height(p-vec2(e,0))-base_height(p+vec2(e,0)))/(2.0*e),1.0,(base_height(p-vec2(0,e))-base_height(p+vec2(0,e)))/(2.0*e));
+ if(local_patch){
+  float t=.065;
+  n.xz+=vec2(track_depth(p+vec2(t,0))-track_depth(p-vec2(t,0)),track_depth(p+vec2(0,t))-track_depth(p-vec2(0,t)))*(.65/(2.0*t));
+ }
  float ripple=cos(dot(p,vec2(3.1,1.4))+drift*7.0)*.004;
  n.xz+=vec2(ripple,ripple*.45)*(1.0-ice)*(1.0-smoothstep(.003,.03,pressed));
  float loose=smoothstep(.06,.25,biome.r*.65);
- float relief=powder_strength*mix(.32,1.0,loose)*(1.0-smoothstep(.001,.045,pressed)*.85)*(1.0-ice);
- // OpenGL normal Y follows texture-up, opposite increasing world Z.
- n=normalize(n);n.xz+=vec2(powder.x,-powder.y)*relief;
+ float relief=powder_strength*mix(.32,1.0,loose)*(1.0-smoothstep(.001,.045,pressed)*.85)*(1.0-ice)*snow_detail_visibility(p);
+ n=normalize(n);n.xz+=powder*relief;
  NORMAL=normalize(mat3(VIEW_MATRIX)*normalize(n));
  ALBEDO=mix(snow_low,snow_high,.30+broad*.35+drift*.18);
  ALBEDO*=mix(.94,1.03,loose);
@@ -80,8 +87,8 @@ void fragment(){
  // This uses the existing track texture, with no extra lights or glow.
  AO=1.0-sole*thin*.10;
  AO_LIGHT_AFFECT=0.0;
- ROUGHNESS=mix(.80,.96,grain);
- SPECULAR=.12;
+ ROUGHNESS=mix(.86,.97,grain);
+ SPECULAR=.10;
  // Exposed mountain shoulders use the same height normals as their collision.
  // Northern snow and tracked walking corridors keep their existing shading.
  float mountain=smoothstep(115.0,121.0,wp.z);

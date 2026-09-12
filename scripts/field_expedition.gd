@@ -26,6 +26,7 @@ var feedback:Control
 var draw_audio:AudioStreamPlayer
 var release_audio:AudioStreamPlayer
 var drawing:=false
+var presence_cooldown:=0.0
 var draw_weapon:=""
 
 func setup(main)->void:
@@ -68,6 +69,7 @@ func track(at:Vector3,yaw:float,species:String)->void:
   tracks.multimesh.set_instance_transform(track_index%192,Transform3D(Basis(Vector3.UP,yaw).scaled(Vector3(radius,1,radius*1.4)),p));track_index+=1
 
 func reset()->void:
+ presence_cooldown=0
  shutdown_spatial_audio()
  cancel_aim()
  feedback.traces.clear();feedback.preview.clear()
@@ -336,6 +338,7 @@ func _process(delta:float)->void:
  if not game.active:cancel_aim();return
  var s=game.survival
  cooldown=maxf(0,cooldown-delta)
+ presence_cooldown=maxf(0,presence_cooldown-delta)
  update_aim(delta,Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
  if game.world.shelter_at(game.player.position).is_empty():s.kit.exposure(delta,game.world.snow_depth(game.player.position),game.player.velocity.length()>.15,s.storm())
  if game.player.is_on_floor():

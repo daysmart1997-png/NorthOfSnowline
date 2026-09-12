@@ -10,9 +10,11 @@ var stock:Node3D
 var cloths:Array[Node3D]=[]
 var cloth_rest:Array[Vector3]=[]
 var clock:=0.0
+var return_guidance
 
 func setup(main)->void:
  game=main;name="ExplorationDetails"
+ return_guidance=preload("res://scripts/return_guidance.gd").new();game.world.add_child(return_guidance);return_guidance.setup(game)
  var station:Node3D=game.world.buildings.station
  doors.assign([station.find_child("CabinetDoorLeft",true,false),station.find_child("CabinetDoorRight",true,false)])
  for i in range(doors.size()):
@@ -55,6 +57,7 @@ func _process(delta:float)->void:
  if game==null:return
  sync()
  if not game.active:return
+ return_guidance.update()
  clock+=delta
  var strength:float=game.survival.storm()
  for i in range(cloths.size()):

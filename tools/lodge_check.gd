@@ -36,7 +36,8 @@ func check_buildings()->void:
  for at in [Vector2(-11,75.2),Vector2(-11,72),Vector2(-9.6,71.8)]:await walk_to(at)
  update_target();assert(target.get("id")=="lodge");interact();await frames(70)
  assert(survival.fires.lodge>0 and world.fire_meshes.lodge.visible and world.fire_lights.lodge.light_energy>0)
- for at in [Vector2(-11,74.6),Vector2(-13.5,74.25)]:await walk_to(at)
+ # The new bedside receiver has its own target; step to the bed's foot to rest.
+ for at in [Vector2(-11,74.6),Vector2(-13.5,73.4)]:await walk_to(at)
  update_target();assert(target.get("id")=="lodge_bed","Sleep bay stays accessible past the low divider")
  interact();await frames();assert(backpack.visible)
  backpack.rest_hours=1;backpack.refresh();var before:float=survival.elapsed

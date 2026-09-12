@@ -15,6 +15,8 @@ func normal_at(at:Vector3)->Vector3:return Terrain.normal(at.x,at.z)
 
 func tree(at:Vector3,scale_value:float)->void:
 	if Terrain.lake_weight(at.x,at.z)>.6:return
+	for site in Arrival.SITES.values():
+		if absf(at.x-site.at.x)<site.half_width+2 and absf(at.z-site.at.z)<site.half_depth+3:return
 	super.tree(at,scale_value)
 	# Consume the original random draws, then keep the vehicle's immediate site clear.
 	if absf(at.x+14)<3.0 and absf(at.z+43)<3.5:
@@ -41,7 +43,7 @@ func shelter_at(at:Vector3)->String:
 	return super.shelter_at(at)
 
 func surface_at(at:Vector3)->String:
-	if shelter_at(at) in ["home","station","gatehouse","lodge"]:return "wood"
+	if shelter_at(at) in ["home","station"] or Arrival.SITES.has(shelter_at(at)):return "wood"
 	if absf(at.x)<1.5 and ((at.z>22 and at.z<25.0) or (at.z> -166 and at.z< -163)):return "wood"
 	if absf(at.x)<2.4 and absf(at.z+86)<9.3:return "wood"
 	if Terrain.lake_weight(at.x,at.z)>.8:return "ice"
@@ -206,7 +208,9 @@ func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 		invisible_wall(at+Vector3(5.60,2.8,-3),Vector3(.23,5.6,.23))
 		invisible_wall(at+Vector3(6.10,.46,-1.8),Vector3(.8,.85,.74))
 	var flame:MeshInstance3D=root.find_child("FireWindow",true,false);flame.visible=false;fire_meshes[id]=flame
-	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.5,-1.3);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
+	# Outside the stove's front face: a shadow-casting emitter inside its iron
+	# shell would extinguish its own illumination.
+	var light:=OmniLight3D.new();light.position=Vector3(2.6,1.25,-.70);light.light_color=Color("ffc18a");light.omni_range=7;light.light_energy=0;root.add_child(light);fire_lights[id]=light
 	var lamp:=OmniLight3D.new();lamp.position=Vector3(.5,2.2,1.8);lamp.light_color=Color("dfb783");lamp.light_energy=.8;lamp.omni_range=7;root.add_child(lamp)
 	# Interior light does not illuminate outdoor snow through closed walls.
 	# Room/actor bits match InteriorView; the visible porch lantern owns its pool.
@@ -214,7 +218,7 @@ func cabin(at:Vector3,id:String,_color:String,_title:String)->void:
 	light.light_cull_mask=room_layer | 8;lamp.light_cull_mask=room_layer | 8
 	var porch_lamp:=OmniLight3D.new();porch_lamp.name="PorchLantern"
 	porch_lamp.position=Vector3(1.31,2.10,4.48);porch_lamp.light_color=Color("eab278")
-	porch_lamp.light_energy=.65;porch_lamp.omni_range=4.6
+	porch_lamp.light_energy=.85;porch_lamp.omni_range=5.5
 	porch_lamp.light_cull_mask=1 | room_layer | 8 | 32;root.add_child(porch_lamp)
 	add_point(id,"fire",at+Vector3(2.6,1.0,-1.35),"铸铁炉 · 添柴")
 	# Identify buildings by silhouette and interior, never a floating nameplate.

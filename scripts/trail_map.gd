@@ -28,6 +28,13 @@ func _draw() -> void:
 	draw_polyline(route, Color("83959f"), 2)
 	draw_line(map_point(Vector2(-90, -86)), map_point(Vector2(90, -86)), Color("405e70"), 7)
 	draw_line(map_point(Vector2(0,-76.7)),map_point(Vector2(0,-95.3)),Color("725f49"),4)
+	# The compact settlement gets a readable inset, without overlapping map labels.
+	if discoveries.has("lodge") or discoveries.has("lodge_route"):
+		var panel:=Rect2(18,425,332,112);draw_rect(panel,Color("273b47"))
+		draw_string(font,Vector2(28,446),"炭工聚落 / 北 ↑",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("d7b879"))
+		for row in [["woodshed",Vector2(40,467),"柴棚 · 干柴"],["bunkhouse",Vector2(199,467),"宿舍 · 衣物"],["lodge",Vector2(40,506),"木屋 · 炉床"],["canteen",Vector2(199,506),"伙房 · 食物"]]:
+			if discoveries.has(row[0]) or discoveries.has("lodge_route"):
+				draw_rect(Rect2(row[1]-Vector2(8,5),Vector2(5,5)),Color("d7b879"));draw_string(font,row[1],row[2],HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color("c1cecd"))
 	for marker in [[Vector2(0,18),"护林小屋"],[Vector2(0,-170),"北岭车站"]]:
 		if marker[1]=="护林小屋" and not discoveries.has("home_reached") and not discoveries.has("lodge_route") and not discoveries.has("home"):continue
 		if marker[1]=="北岭车站" and not discoveries.has("home_log") and not discoveries.has("station"):continue
@@ -44,8 +51,8 @@ func _draw() -> void:
 	var p := map_point(Vector2(player_position.x, player_position.z))
 	draw_circle(p, 8, Color("17232b"))
 	draw_circle(p, 5, Color("d7b879"))
-	draw_string(font, Vector2(22, 448), "等高线：高地   蓝灰：冻湖   金点：你", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
-	draw_string(font, Vector2(22, 475), "搜寻落脚点，准备后再向北                    Tab 收起", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
+	draw_string(font, Vector2(22, 555), "等高线：高地   蓝灰：冻湖   金点：你", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
+	draw_string(font, Vector2(22, 582), "搜寻落脚点，准备后再向北                    Tab 收起", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("b8c3c7"))
 
 func panel_style() -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()

@@ -30,8 +30,8 @@ func check_interior()->void:
 	Input.action_press("move_down")
 	for i in range(180):await get_tree().physics_frame
 	Input.action_release("move_down");await settle()
-	# Exterior includes the two new southern buildings (layers 256 and 512).
-	assert(player.position.z>25 and interior_view.room.is_empty() and player.camera.cull_mask==943)
+	# Exterior includes the approach and the three settlement interiors.
+	assert(player.position.z>25 and interior_view.room.is_empty() and player.camera.cull_mask==8111)
 	assert(player.camera.environment==null and world.sun.visible)
 	assert(interior_view.backdrop.render_target_update_mode==SubViewport.UPDATE_DISABLED,"No second render outside")
 	assert(world.track_marks.size()>0,"Walking out leaves real snow marks")

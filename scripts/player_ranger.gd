@@ -14,6 +14,9 @@ var snow_world:Node3D
 var skeleton:Skeleton3D
 var ground_samples:Dictionary={}
 var feet_modifier:SkeletonModifier3D
+var foot_armed:Dictionary={"L":true,"R":true}
+var contact_age:=1.0
+var contact_evidence:Dictionary={}
 
 func _ready()->void:
 	super._ready()
@@ -25,11 +28,13 @@ func _ready()->void:
 	var ranger:Node3D=MODEL.instantiate()
 	visual.add_child(ranger)
 	skeleton=ranger.find_children("*","Skeleton3D",true,false)[0]
+	skeleton.modifier_callback_mode_process=Skeleton3D.MODIFIER_CALLBACK_MODE_PROCESS_PHYSICS
 	feet_modifier=preload("res://scripts/grounded_feet.gd").new()
 	feet_modifier.player=self;feet_modifier.terrain=snow_world;skeleton.add_child(feet_modifier)
 	var players:=ranger.find_children("*","AnimationPlayer",true,false)
 	if not players.is_empty():
 		animation=players[0]
+		animation.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 		for clip in animation.get_animation_list():
 			var name_part:String=str(clip).get_slice("/",str(clip).get_slice_count("/")-1).trim_prefix("Ranger_")
 			if name_part in ["Idle","Walk","Run","CrouchIdle","CrouchWalk","Pickup","Interact","Consume"]:animation_names[name_part]=clip
@@ -64,7 +69,7 @@ func _physics_process(delta:float)->void:
 		animation.speed_scale=0;breath_cloud.speed_scale=0
 		return
 	breath_cloud.speed_scale=1
-	sample_ground()
+	contact_age+=delta
 	var speed:=Vector2(velocity.x,velocity.z).length()
 	# The imported crouch already bends knees and hips; do not lower the complete model again.
 	visual.position.y=lerpf(visual.position.y,-snow_world.snow_depth(position)*.09,delta*10)
@@ -81,6 +86,7 @@ func _physics_process(delta:float)->void:
 		var keep_phase:bool=last_clip in moving_clips and clip in moving_clips
 		var phase:float=fposmod(animation.current_animation_position/maxf(animation.current_animation_length,.001),1.0) if keep_phase else (.5 if gait_half==0 else 0.0)
 		last_clip=clip;animation.play(animation_names[clip],.18)
+		if clip in moving_clips and not keep_phase:foot_armed["R" if gait_half==0 else "L"]=true
 		# Walk/run/crouch share alternating contacts. Retain the current support
 		# foot across transitions instead of restarting every clip on the left.
 		if clip in moving_clips:animation.seek(phase*anim.length,true)
@@ -88,10 +94,24 @@ func _physics_process(delta:float)->void:
 	var base_speed:=3.8 if clip=="Run" else (.85 if clip=="CrouchWalk" else 1.65)
 	animation.speed_scale=1.0 if speed<.12 else anim.length/cycle_seconds*clampf(speed/base_speed,.08,1.3)
 	if AUTHORED_SPEED.has(clip):animation.speed_scale=clampf(speed/float(AUTHORED_SPEED[clip]),.08,1.6)
-	if speed>.2 and is_on_floor():
-		var half:=int(fmod(animation.current_animation_position/maxf(anim.length,.001),1.0)*2)
-		if half!=gait_half and position.distance_to(last_contact)>.18:
-			gait_half=half;last_contact=position;make_contact(half==0)
+
+func update_foot_contacts()->void:
+	# Called by the final foot modifier, after this physics tick's animation/IK.
+	# A lifted foot re-arms; its actual return to the surface emits one event.
+	if not enabled or not is_on_floor():return
+	var moving:=Vector2(velocity.x,velocity.z).length()>.2 and last_clip in ["Walk","Run","CrouchWalk"]
+	for side in ["L","R"]:
+		var at:Vector3=skeleton.global_transform*skeleton.get_bone_global_pose(skeleton.find_bone("foot."+side)).origin
+		var hit:=foot_ground(at)
+		if hit.is_empty():foot_armed[side]=true;continue
+		var clearance:float=at.y-hit.position.y
+		if clearance>.105:foot_armed[side]=true
+		var half:=0 if side=="L" else 1
+		if moving and foot_armed[side] and clearance<=.075 and half!=gait_half and contact_age>=.14 and position.distance_to(last_contact)>.18:
+			foot_armed[side]=false;gait_half=half;last_contact=position;contact_age=0
+			ground_samples[side]={"height":hit.position.y,"normal":hit.normal,"at":hit.position}
+			contact_evidence={"foot":at,"ground":hit.position,"clearance":clearance,"clip":last_clip,"phase":animation.current_animation_position/animation.current_animation_length}
+			make_contact(side=="L")
 
 func make_contact(left:bool)->void:
 	var pressure:float=(1.23 if sprinting else (.72 if crouching else 1.0))*(.88+get_parent().survival.weight()/60.0)
@@ -100,7 +120,10 @@ func make_contact(left:bool)->void:
 	var surface:String=snow_world.surface_at(at)
 	# Contact on raised props must not stamp the snow underneath the object.
 	if absf(at.y-snow_world.terrain_height(at.x,at.z))<.18:
-		snow_world.stamp_snow(at,visual.rotation.y,pressure,left)
+		var bone:=skeleton.find_bone("foot."+side)
+		var rest:Basis=skeleton.get_bone_global_rest(bone).basis
+		var forward:Vector3=skeleton.global_basis*skeleton.get_bone_global_pose(bone).basis*rest.inverse()*Vector3.FORWARD
+		snow_world.stamp_snow(at,atan2(-forward.x,-forward.z),pressure,left)
 	else:snow_world.last_sole.erase(left)
 	footfall.emit(surface,pressure,left)
 
@@ -113,15 +136,19 @@ func sample_ground()->void:
 	for side in ["L","R"]:
 		var bone:=skeleton.find_bone("foot."+side)
 		var at:Vector3=skeleton.global_transform*skeleton.get_bone_global_pose(bone).origin
-		var ray:=PhysicsRayQueryParameters3D.create(at+Vector3.UP*.5,at-Vector3.UP*.9)
-		ray.exclude=[get_rid()]
-		var hit:=get_world_3d().direct_space_state.intersect_ray(ray)
+		var hit:=foot_ground(at)
 		if not hit.is_empty():ground_samples[side]={"height":hit.position.y,"normal":hit.normal,"at":hit.position}
 		else:ground_samples.erase(side)
+
+func foot_ground(at:Vector3)->Dictionary:
+	var ray:=PhysicsRayQueryParameters3D.create(at+Vector3.UP*.5,at-Vector3.UP*.9)
+	ray.exclude=[get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(ray)
 
 func clear_footprints()->void:
 	super.clear_footprints()
 	if is_instance_valid(snow_world):snow_world.clear_tracks()
 	last_contact=position;gait_half=-1
 	ground_samples.clear()
+	foot_armed={"L":true,"R":true};contact_age=1.0;contact_evidence.clear()
 	if is_instance_valid(feet_modifier):feet_modifier.corrections.clear();feet_modifier.contact_normals.clear();feet_modifier.authored_rotations.clear()

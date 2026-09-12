@@ -97,7 +97,7 @@ func _ready() -> void:
 	add_child(sun)
 	# A faint, shadowless night fill reveals snow normals without another shadow map.
 	night_fill = DirectionalLight3D.new()
-	night_fill.light_color = Color("8299be")
+	night_fill.light_color = Color("98aecb")
 	night_fill.light_energy = 0.0
 	night_fill.shadow_enabled = false
 	night_fill.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
@@ -376,12 +376,12 @@ func update_daylight(elapsed: float, storm: float) -> void:
 	sun.shadow_enabled = sun.light_energy > 0.015
 	# Snow scatters light into long morning/evening shadows. Keep the actual
 	# solar direction and silhouettes while reducing their graphic dominance.
-	sun.shadow_opacity = lerpf(.34, .84, smoothstep(.12, .65, DayCycle.sun_direction(elapsed).y)) * (1.0 - storm * .24)
+	sun.shadow_opacity = lerpf(.06, .76, smoothstep(.06, .65, DayCycle.sun_direction(elapsed).y)) * (1.0 - storm * .4)
 	night_fill.basis = Basis.looking_at(DayCycle.sun_direction(elapsed), Vector3.UP)
-	night_fill.light_energy = 0.22 * DayCycle.sun_strength(elapsed + DayCycle.DAY_SECONDS * 0.5) * (1.0 - storm * 0.45)
+	night_fill.light_energy = 0.30 * DayCycle.sun_strength(elapsed + DayCycle.DAY_SECONDS * 0.5) * (1.0 - storm * 0.45)
 	# Diffuse blue fill keeps silhouettes, trails and snow relief readable at night.
-	env.ambient_light_color = Color("7086ac").lerp(Color("a4b2c7"), day)
-	env.ambient_light_energy = lerpf(0.32, 0.42, day)
+	env.ambient_light_color = Color("8093b0").lerp(Color("a4b2c7"), day)
+	env.ambient_light_energy = lerpf(0.36, 0.42, day)
 	env.fog_light_color = Color("25344e").lerp(Color("607b9f"), day).lerp(Color("947f82"), warm * 0.3)
 	var sky_mat := env.sky.sky_material as ProceduralSkyMaterial
 	sky_mat.sky_top_color = Color("101b30").lerp(Color("536f87"), day)

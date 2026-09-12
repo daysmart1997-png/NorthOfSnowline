@@ -31,6 +31,18 @@ var shins:Array=[]
 var leg_rest:Array[Vector3]=[]
 var shin_rest:Array[Vector3]=[]
 var head_rest:=Vector3.ZERO
+var presence_cooldown:=0.0
+
+# A distant cue describes a real living animal, before its detection changes.
+# It never grants awareness to the animal or pretends the forest is safe.
+func presence_hint()->String:
+ if hp<=0 or species=="deer" or alert>.35:return ""
+ var p:Vector3=field.game.player.global_position
+ if not field.game.world.shelter_at(p).is_empty():return ""
+ var offset:Vector3=global_position-p
+ if offset.length()<6 or offset.length()>18-field.game.survival.storm()*4:return ""
+ var bearing:String=("东" if offset.x>0 else "西") if absf(offset.x)>absf(offset.z) else ("南" if offset.z>0 else "北")
+ return "%s侧传来%s的声音。先停下辨认，拉开距离；奔跑会更容易惊动它。"%[bearing,"熊" if species=="bear" else "狼"]
 
 func setup(owner_field,id:String,kind:String,at:Vector3,dead:=false)->void:
  field=owner_field;animal_id=id;species=kind;home=at;position=at
@@ -63,6 +75,11 @@ func _physics_process(delta:float)->void:
   velocity=Vector3.ZERO;save_state();return
  var player=field.game.player;var s=field.game.survival
  var offset:Vector3=player.global_position-global_position;var distance:=offset.length()
+ presence_cooldown=maxf(0,presence_cooldown-delta)
+ if presence_cooldown<=0 and field.presence_cooldown<=0:
+  var hint:=presence_hint()
+  if not hint.is_empty():
+   presence_cooldown=45;field.presence_cooldown=12;field.game.notify(hint);field.animal_sound(species,global_position)
  sight_clock-=delta
  if sight_clock<=0:
   sight_clock=.18;sees=false

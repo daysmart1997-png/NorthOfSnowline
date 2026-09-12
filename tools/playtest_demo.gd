@@ -36,7 +36,7 @@ func observe(seconds: float) -> void:
 		await get_tree().process_frame
 
 func chapter(title: String) -> void:
-	var record := {"title":title,"video_seconds":snappedf(demo_seconds,.01),"game_time":DayCycle.clock_text(survival.elapsed),"position":[player.position.x,player.position.y,player.position.z],"health":survival.health,"temperature":survival.temperature,"inventory":survival.items.duplicate()}
+	var record := {"title":title,"video_seconds":snappedf(demo_seconds,.01),"game_time":DayCycle.clock_text(survival.solar_time()),"game_day":DayCycle.day(survival.solar_time()),"position":[player.position.x,player.position.y,player.position.z],"health":survival.health,"temperature":survival.temperature,"inventory":survival.items.duplicate()}
 	demo_events.append(record)
 	print("DEMO_CHAPTER ", JSON.stringify(record))
 	write_report("running")

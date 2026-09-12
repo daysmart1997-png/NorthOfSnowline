@@ -62,6 +62,7 @@ var help_label:Label
 var preferences=preload("res://scripts/game_preferences.gd").new()
 var settings_box:VBoxContainer
 var menu_box:VBoxContainer
+var title_screen:Control
 var pending_action:Dictionary={}
 var action_clock:=0.0
 var action_duration:=.7
@@ -262,7 +263,7 @@ func build_ui()->void:
 	toast.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	help_label=hud_label("",Vector2.ZERO,Vector2.ZERO,14,Palette.MUTED)
 	help_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-	map=TrailMap.new();map.position=Vector2(858,112);map.size=Vector2(390,490);map.visible=false;canvas.add_child(map)
+	map=TrailMap.new();map.position=Vector2(858,112);map.size=Vector2(390,590);map.visible=false;canvas.add_child(map)
 	menu_veil=ColorRect.new();menu_veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	menu_veil.color=Color(.035,.065,.085,.66);menu_veil.mouse_filter=Control.MOUSE_FILTER_IGNORE;canvas.add_child(menu_veil)
 	menu=panel(Vector2(360,72),Vector2(560,576))
@@ -285,6 +286,9 @@ func build_ui()->void:
 	var controls:=label("WASD 移动 · Shift 奔跑 · C 蹲行 · E 交互\nB 行囊 · V 制作 · Tab 地图 · M 磁带 · H 隐藏界面",14,Palette.MUTED)
 	menu_box.add_child(controls)
 	build_settings()
+	title_screen=preload("res://scripts/title_screen.gd").new();canvas.add_child(title_screen)
+	canvas.move_child(title_screen,canvas.get_children().find(menu))
+	title_screen.setup(self)
 	canvas.resized.connect(layout_exploration_hud)
 	layout_exploration_hud()
 
@@ -327,7 +331,7 @@ func show_settings(show:bool)->void:
 func start_new() -> void:
 	cancel_action()
 	survival = Survival.new()
-	survival.temperature=68;survival.energy=70;survival.arrival_journey=true
+	survival.temperature=68;survival.energy=70;survival.arrival_journey=true;survival.clock_offset=480
 	survival.items={"wood":1,"food":0,"water":1}
 	survival.kit.owned[survival.kit.equipped.feet].wet=35
 	if field!=null:field.reset()
@@ -363,11 +367,13 @@ func set_menu(show_menu: bool) -> void:
 	load_button.disabled = not FileAccess.file_exists(Saves.manual_source(save_path))
 	checkpoint_button.disabled=not FileAccess.file_exists(Saves.checkpoint_path(save_path))
 	new_button.text = "重新开始旅程" if started else "开始新的旅程"
+	if is_instance_valid(title_screen):
+		title_screen.footer.text="WASD 移动 · Shift 奔跑 · C 蹲行 · E 交互\nB 行囊 · V 制作 · Tab 地图 · M 磁带 · H 隐藏界面" if started else "一场风雪，一盏灯，一段尚未回应的信号。"
 	new_button.get_parent().move_child(new_button,7 if started else 4)
 	if show_menu:
 		if started:resume_button.grab_focus()
 		else:new_button.grab_focus()
-	menu_title.text = "暂停 · 风雪正在等待" if started else "风雪将至"
+	menu_title.text = "暂停 · 风雪正在等待" if started else "第一章  /  失联"
 	if survival.completed and survival.health>0:
 		menu_title.text = "求援成功 · 失联"
 		menu_info.text = "谷口已经记下你的位置，约好明晚再次守听。\n旧频道出现微弱信号，可休整后再次查看。\n林区时间已过：%d 小时 %02d 分钟。" % [int(survival.elapsed) / 60, int(survival.elapsed) % 60]
@@ -375,7 +381,7 @@ func set_menu(show_menu: bool) -> void:
 		menu_title.text = "你倒在了风雪里"
 		menu_info.text = "下次可以在车站火炉旁恢复体温，\n或沿东侧避风林道返程。\n读取保存，或重新开始。"
 	else:
-		menu_info.text = "你穿过风雪中的山口，口粮已经用尽。\n沿途搜寻食物与落脚处，找到能长期安顿的护林小屋。\n恢复通信，询问失联搭档周岑的消息。"
+		menu_info.text = "穿过风雪，寻找一处灯火。\n让失联的声音，再次抵达。" if not started else "旅程暂歇。风雪之外，仍有人等待你的信号。"
 
 func _unhandled_input(event: InputEvent) -> void:
 	if capture_mode:return
@@ -407,7 +413,7 @@ func _process(delta: float) -> void:
 	var overlay:bool=menu.visible or backpack.visible or story_panel.visible
 	menu_veil.visible=overlay
 	for child in canvas.get_children():
-		if child not in [menu,backpack,map,menu_veil,story_panel]:child.visible=not overlay
+		if child not in [menu,backpack,map,menu_veil,story_panel,title_screen]:child.visible=not overlay
 	map.modulate.a=0.0 if overlay else 1.0
 	if performance_check:
 		performance_clock+=delta
@@ -420,7 +426,7 @@ func _process(delta: float) -> void:
 		if survival.arrival_journey and player.position.z<123 and not survival.discovered.has("pass_exit"):
 			survival.discovered.append("pass_exit")
 			if not survival.discovered.has("home_reached"):notify("电线杆旁露出一段铁皮屋檐。也许能找到留下的食物。")
-		if shelter in ["gatehouse","lodge","home"] and not survival.discovered.has(shelter if shelter!="home" else "home_reached"):
+		if (survival.Arrival.SITES.has(shelter) or shelter=="home") and not survival.discovered.has(shelter if shelter!="home" else "home_reached"):
 			survival.discovered.append(shelter if shelter!="home" else "home_reached")
 			notify("找到护林小屋 · 检查炉火与无线电，准备在这里安顿" if shelter=="home" else survival.Arrival.SITES[shelter].description)
 		player.move_factor = survival.speed_factor()*world.travel_factor(player.position,player.velocity)
@@ -431,7 +437,7 @@ func _process(delta: float) -> void:
 		for poi in world.pois:
 			if not poi.get("inspect",false) and not poi.get("enter",false) and not survival.discovered.has(poi.id) and player.position.distance_to(poi.at)<9:
 				survival.discovered.append(poi.id);notify("发现："+poi.title+" · 已记入手记")
-		if active and survival.parts and not survival.completed and not survival.chapter.weather_warned and shelter.is_empty() and (survival.storm()>.35 or DayCycle.cold(survival.elapsed)>.35):
+		if active and survival.parts and not survival.completed and not survival.chapter.weather_warned and shelter.is_empty() and (survival.storm()>.35 or DayCycle.cold(survival.solar_time())>.35):
 			survival.chapter.weather_warned=true
 			notify("风正在变硬。先找背风处；铁路直返，林道绕远但避风。")
 		if survival.health <= 0: set_menu(true)
@@ -439,7 +445,7 @@ func _process(delta: float) -> void:
 	cassette.fire_distance=player.position.distance_to(world.fire_meshes[shelter].global_position) if world.fire_meshes.has(shelter) else 0.0
 	cassette.sync(survival,menu.visible,shelter.is_empty(),Vector2(player.velocity.x,player.velocity.z).length() if active else 0.0,float(survival.fires.get(shelter,0))>0,active)
 	world.update_snow(player.position,delta if active else 0.0,survival.storm())
-	world.weather_update(survival.storm(), player.position, survival.fires, survival.elapsed)
+	world.weather_update(survival.storm(), player.position, survival.fires, survival.solar_time())
 	interior_view.update()
 	if is_instance_valid(radio_lamp) and radio_lit!=(survival.chapter.radio_step>0):
 		radio_lit=survival.chapter.radio_step>0
@@ -460,6 +466,8 @@ func update_target() -> void:
 	target = {}
 	var best := 2.5
 	for point in world.points:
+		if point.id=="lodge_board" and survival.clock_offset<=0:continue
+		if point.id=="morning_tracks" and not survival.morning_trace_visible():continue
 		if survival.collected.has(point.id): continue
 		var distance := player.position.distance_to(point.position)
 		if distance >= best: continue
@@ -502,6 +510,7 @@ func advance_action(delta:float)->void:
 		"loot":notify(survival.loot(action.id,action.contents))
 		"clue":
 			if not survival.discovered.has(action.id):survival.discovered.append(action.id)
+			if action.id=="lodge_board":open_story("lodge_board");return
 			if action.id=="departure_trace":
 				open_story("departure");return
 			backpack.journal_focus=action.id;backpack.tab="journal";toggle_backpack()
@@ -539,7 +548,7 @@ func update_hud(shelter:String,windbreak:bool)->void:
 	status_hud.action_progress=action_clock/action_duration if not pending_action.is_empty() else -1.0
 	status_hud.queue_redraw()
 	var weather:="晴冷" if survival.storm()<.25 else ("风雪增强" if survival.storm()<.7 else "暴雪")
-	weather_label.text="第 %d 天  ·  %s  %s\n%s  /  %d°C  ·  %s"%[DayCycle.day(survival.elapsed),DayCycle.clock_text(survival.elapsed),DayCycle.phase(survival.elapsed),weather,roundi(survival.outdoor_temperature()),world.terrain_name(player.position)]
+	weather_label.text="第 %d 天  ·  %s  %s\n%s  /  %d°C  ·  %s"%[DayCycle.day(survival.solar_time()),DayCycle.clock_text(survival.solar_time()),DayCycle.phase(survival.solar_time()),weather,roundi(survival.outdoor_temperature()),world.terrain_name(player.position)]
 	objective.text=Chapter.objective(survival)
 	if objective.text!=objective_seen:objective_seen=objective.text;objective_reveal=9.0
 	if active:objective_reveal=maxf(0,objective_reveal-get_process_delta_time())
@@ -551,9 +560,10 @@ func update_hud(shelter:String,windbreak:bool)->void:
 		context_label.text="庇护所 · 炉火剩余 %d 分钟 · 正在回暖"%ceili(remaining) if remaining>0 else ("庇护所 · 已封窗，失温减缓" if shelter=="home" and survival.upgrades.insulation else "庇护所 · 尚未点火")
 		if shelter=="gatehouse":context_label.text="临时避风 · 破窗漏风 · 无炉无卧铺"
 		elif shelter=="lodge":context_label.text="临时木屋 · "+("炉火剩余 %d 分钟 · 可预估休息"%ceili(remaining) if remaining>0 else "有炉有卧铺 · 需自行添柴")
+		elif shelter in ["canteen","woodshed","bunkhouse"]:context_label.text=survival.Arrival.SITES[shelter].title+" · 无可用炉床 · 取物后回炭工木屋"
 	elif survival.temperature<25:context_label.text="体温过低 · 尽快寻找火炉"
-	elif DayCycle.cold(survival.elapsed)>.65:context_label.text="夜间严寒 · 林道避风，尽早寻找庇护所" if windbreak else "夜间严寒 · 回庇护所生火取暖"
-	elif DayCycle.phase(survival.elapsed)=="暮色":context_label.text="天色渐暗 · 留好返程的木柴与口粮"
+	elif DayCycle.cold(survival.solar_time())>.65:context_label.text="夜间严寒 · 林道避风，尽早寻找庇护所" if windbreak else "夜间严寒 · 回庇护所生火取暖"
+	elif DayCycle.phase(survival.solar_time())=="暮色":context_label.text="天色渐暗 · 留好返程的木柴与口粮"
 	elif windbreak:context_label.text="林道避风 · 失温减缓"
 	context_label.add_theme_color_override("font_color",Palette.DANGER if survival.temperature<25 else Palette.ACCENT)
 	context_label.position.y=96 if objective.visible else 32
@@ -716,11 +726,11 @@ func frontier_check()->void:
 	for i in range(35):await get_tree().physics_frame
 	assert(player.is_on_floor() and absf(player.position.y+1.65)<.06,"Lake collision agrees with visible ice level")
 	for name in ["Interior","Roof","StorageChest","UpgradeBed","WindowRepairs"]:assert(world.buildings.home.find_child(name,true,false)!=null)
-	assert(world.get_node("TimberTrestleBridge")!=null and world.pois.filter(func(p):return not p.get("inspect",false)).size()==11)
+	assert(world.get_node("TimberTrestleBridge")!=null and world.pois.filter(func(p):return not p.get("inspect",false)).size()==14)
 	active=false;player.enabled=false;set_process(false);cassette.shutdown();story_panel.shutdown_audio();backpack.shutdown_ui()
 	await get_tree().process_frame;await get_tree().process_frame
 	OS.delay_msec(100)
-	print("FRONTIER_OK: ridge/basin/lake heights, independent snow accumulation, depth compression, continuous grooves, ice exclusion, live foot IK, terrain collision, modular interiors, eleven places plus inspectable clues")
+	print("FRONTIER_OK: ridge/basin/lake heights, independent snow accumulation, depth compression, continuous grooves, ice exclusion, live foot IK, terrain collision, modular interiors, fourteen places plus inspectable clues")
 	get_tree().quit()
 
 func integration_check() -> void:
@@ -891,6 +901,11 @@ func polish_check()->void:
 	get_tree().quit()
 
 func click_control(control:Control)->void:
+	var ancestor:Node=control.get_parent()
+	while ancestor!=null:
+		if ancestor is ScrollContainer:ancestor.ensure_control_visible(control)
+		ancestor=ancestor.get_parent()
+	await get_tree().process_frame
 	var point:=control.get_global_rect().get_center()
 	var motion:=InputEventMouseMotion.new();motion.position=point;get_viewport().push_input(motion,true)
 	var down:=InputEventMouseButton.new();down.position=point;down.button_index=MOUSE_BUTTON_LEFT;down.pressed=true;get_viewport().push_input(down,true)
@@ -974,10 +989,10 @@ func day_cycle_check()->void:
 	assert(survival.elapsed==paused_time,"Open inventory freezes time")
 	player.position=Vector3(0,.24,20.5)
 	survival.upgrades.bed=true;survival.fires.home=240
-	survival.elapsed=890 # 23:50, crossing midnight while resting in the inventory.
+	survival.elapsed=890-survival.clock_offset # 23:50, crossing midnight while resting in the inventory.
 	var before_rest:float=survival.elapsed
 	backpack_action("rest","")
-	assert(survival.elapsed==before_rest+120 and DayCycle.day(survival.elapsed)==2,"Rest intentionally advances two hours through midnight")
+	assert(survival.elapsed==before_rest+120 and DayCycle.day(survival.solar_time())==2,"Rest intentionally advances two hours through midnight")
 	assert(survival.fires.home==120,"Rest consumes fire fuel on the same clock")
 	for i in range(4):await get_tree().process_frame
 	assert(world.sun.light_energy==0 and not world.sun.shadow_enabled,"Sun is below the horizon at night")

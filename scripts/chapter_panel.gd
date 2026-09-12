@@ -49,7 +49,21 @@ func refresh()->void:
 	route_status.visible=scene_kind=="station"
 	scroll.custom_minimum_size.y=145 if scene_kind=="station" else 230
 	body_label.add_theme_font_size_override("font_size",20 if game.preferences.large_text else 17)
-	if scene_kind=="departure":
+	if scene_kind=="lodge_board":
+		title_label.text="把挡风板送进炉子？"
+		var removed:bool=s.discovered.has("lodge_board_removed")
+		body_label.text="炉旁的墙缝用两块干木板封着，钉头还缠着一截旧布。\n\n拆下它们能立刻得到两根木柴，但木屋会漏风：有火时回暖变慢，熄火后失温加快。\n\n也可以保留挡风板，趁还能走动去西北柴棚找燃料。修回木板需要两根柴和一份布料。\n\n随身木柴 %d · 布料 %d"%[s.wood,s.count("cloth")]
+		if removed:body_label.text="墙缝正往里面送冷风。炉火能顶一阵，睡前还得看它能烧多久。\n\n修复消耗两根木柴、一份布料，恢复原有保暖能力。\n\n随身木柴 %d · 布料 %d"%[s.wood,s.count("cloth")]
+		option("board_repair" if removed else "board_remove","修好挡风板 · 木柴 2 / 布料 1" if removed else "拆板取柴 · 获得 2 根柴，木屋更冷",func():change_board("repair" if removed else "remove"))
+		choices.get_child(0).disabled=(s.wood<2 or s.count("cloth")<1) if removed else s.weight()+2*s.ITEMS.wood.weight>s.MAX_WEIGHT
+		choices.get_child(0).tooltip_text="需要两根木柴和一份布料" if removed else "需要能装下两根木柴的负重空间"
+		option("leave","暂时保留现状",game.close_story)
+	elif scene_kind=="embers_note":
+		title_label.text=Chapter.CLUES.embers_note.title
+		body_label.text=Chapter.CLUES.embers_note.text
+		if not s.discovered.has("embers_note"):s.discovered.append("embers_note")
+		option("leave","收好内页 · 先照顾好自己",game.close_story)
+	elif scene_kind=="departure":
 		title_label.text=Chapter.CLUES.departure_trace.title;body_label.text=Chapter.CLUES.departure_trace.text
 		option("leave","放回纸条 · 检查自己的补给",game.close_story)
 		option("replay","再读一遍",func():scroll.scroll_vertical=0;game.experience.sound("memory_tape"))
@@ -67,8 +81,8 @@ func refresh()->void:
 		title_label.text="留给后来的人"
 		body_label.text=Chapter.CLUES.station_dispatch.text
 		route_status.text=return_conditions()
-		option("direct","沿铁路返家 · 路程直接，迎风更冷",func():select_route("direct"))
-		option("sheltered","沿林道返家 · 树后避风，可经旧营地",func():select_route("sheltered"))
+		option("direct","沿铁路返家 · 迎风，西侧有狼活动",func():select_route("direct"))
+		option("sheltered","沿林道返家 · 东侧绕行，树后避风",func():select_route("sheltered"))
 		option("ridge","绕访西岭 · 可选收信簿，高地迎风",func():select_route("ridge"))
 	elif scene_kind=="epilogue":
 		match int(s.chapter.epilogue_step):
@@ -114,16 +128,20 @@ func refresh()->void:
 
 func return_conditions()->String:
 	var s=game.survival
-	var lines:Array[String]=["现在 %s · 木柴 %d · 水 %d"%[game.DayCycle.clock_text(s.elapsed),s.wood,s.count("water")],"按当前衣物/步行状态，从维修间返家估算："]
+	var lines:Array[String]=["现在 %s · 木柴 %d · 水 %d"%[game.DayCycle.clock_text(s.solar_time()),s.wood,s.count("water")],"按当前衣物/步行状态，从维修间返家估算："]
 	for row in [["direct","铁路"],["sheltered","林道"],["ridge","西岭"]]:
 		lines.append(Routes.line(row[1],Routes.forecast(s,row[0],game.world)))
-	lines.append("不计搜寻与动物遭遇；绕行耗时可能抵消避风收益。")
+	lines.append("不计搜寻，也不含动物袭击。铁路西侧有狼；林道仍需观察。")
 	if s.temperature<40:lines.append("先添柴取暖；避风不能替代炉火。")
 	elif s.count("water")==0 or s.thirst<35:lines.append("检查水壶：有炉火时可用一份柴融雪。")
 	return "\n".join(lines)
 
 func select_route(route:String)->void:
 	if Chapter.choose_route(game.survival,route):game.close_story();game.notify("已记下返程打算 · "+Chapter.ROUTES[route])
+
+func change_board(action:String)->void:
+	var message:String=game.survival.lodge_board(action,game.world.shelter_at(game.player.position))
+	game.world.arrival.sync(game.survival);game.notify(message);refresh()
 
 func transmit(choice:String)->void:
 	if Chapter.advance_radio(game.survival,choice):

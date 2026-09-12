@@ -27,7 +27,7 @@ static func forecast(state,route:String,world)->Dictionary:
    s.tick(dt,shelter,protected,false)
    var step:float=speed*dt;at+=direction*step;distance+=step;ticks+=1
  var duration:float=s.elapsed-initial_time
- return {"minutes":ceili(duration),"arrival":DayCycle.clock_text(s.elapsed),"temperature_loss":roundi(maxf(0,initial_temperature-s.temperature)),"water_loss":roundi(initial_thirst-s.thirst),"temperature":s.temperature,"thirst":s.thirst,"health_loss":maxf(0,initial_health-s.health),"distance":distance,"protected_seconds":sheltered_seconds,"unsafe":s.health<initial_health or s.temperature<20 or s.thirst<15,"finished":at.distance_to(PATHS[route][-1])<.1}
+ return {"minutes":ceili(duration),"arrival":DayCycle.clock_text(s.solar_time()),"temperature_loss":roundi(maxf(0,initial_temperature-s.temperature)),"water_loss":roundi(initial_thirst-s.thirst),"temperature":s.temperature,"thirst":s.thirst,"health_loss":maxf(0,initial_health-s.health),"distance":distance,"protected_seconds":sheltered_seconds,"unsafe":s.health<initial_health or s.temperature<20 or s.thirst<15,"finished":at.distance_to(PATHS[route][-1])<.1}
 
 static func line(name:String,p:Dictionary)->String:
  if p.is_empty():return name+" · 暂无估算"

@@ -70,6 +70,7 @@ var hunger := 35.0
 var thirst := 30.0
 var energy := 90.0
 var elapsed := 0.0
+var clock_offset := 0.0 # Legacy journeys start at 09:00; new arrivals at 17:00.
 var completed := false
 var chapter:Dictionary = Chapter.fresh()
 var items := {"wood":2,"food":2,"water":1}
@@ -102,14 +103,18 @@ func weight() -> float:
 	return total
 
 func storm() -> float:
+	if clock_offset>0 and elapsed<1200:
+		return .12+.58*smoothstep(70,300,elapsed)*(1.0-smoothstep(600,900,elapsed))
 	if weather_profile==1 and elapsed<1200.0:
 		# First departure: a readable calm window, peak after dusk has begun.
 		return smoothstep(240.0,720.0,elapsed)*(1.0-smoothstep(900.0,1200.0,elapsed))
 	var phase := fmod(elapsed, 1200.0)
 	return clampf((phase - 90.0) / 360.0, 0.0, 1.0) * (1.0 - clampf((phase - 850.0) / 300.0, 0.0, 1.0))
 
+func solar_time()->float:return elapsed+clock_offset
+
 func outdoor_temperature() -> float:
-	return -12.0 - 15.0 * storm() - 8.0 * DayCycle.cold(elapsed)
+	return -12.0 - 15.0 * storm() - 8.0 * DayCycle.cold(solar_time())
 
 func speed_factor() -> float:
 	return (0.75 if kit.has_condition("sprain") else 1.0) * (0.88 if thirst<20 or hunger<20 else 1.0) * clampf(1.0 - maxf(weight() - 15.0, 0.0) * 0.035, 0.65, 1.0) * (0.82 if temperature < 22 or energy < 15 else 1.0)
@@ -120,10 +125,11 @@ func music_effect() -> String:
 # Shared by live simulation, rest forecasts and the HUD trend indicator.
 func temperature_rate(shelter:String, windbreak:bool)->float:
 	if not shelter.is_empty():
-		if float(fires.get(shelter,0))>0:return 1.0
-		var loss:=.035+.04*storm()+.035*DayCycle.cold(elapsed)
-		return -loss*(.35 if shelter=="home" and upgrades.insulation else float(Arrival.SITES.get(shelter,{}).get("loss",1.0)))
-	return -(.10+.26*storm()+.08*DayCycle.cold(elapsed))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)*clampf(1.0+(50.0-kit.warmth())/70.0,.55,1.65)*(1.0-kit.windproof()*.35)
+		var breached:bool=shelter=="lodge" and discovered.has("lodge_board_removed")
+		if float(fires.get(shelter,0))>0:return .65 if breached else 1.0
+		var loss:=.035+.04*storm()+.035*DayCycle.cold(solar_time())
+		return -loss*(.35 if shelter=="home" and upgrades.insulation else float(Arrival.SITES.get(shelter,{}).get("loss",1.0)))*(1.8 if breached else 1.0)
+	return -(.10+.26*storm()+.08*DayCycle.cold(solar_time()))*(.55 if windbreak else 1.0)*(.75 if music_effect()=="tape_embers" else 1.0)*clampf(1.0+(50.0-kit.warmth())/70.0,.55,1.65)*(1.0-kit.windproof()*.35)*(1.15 if clock_offset>0 and hunger<20 else 1.0)
 
 func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> void:
 	if health <= 0: return
@@ -134,10 +140,12 @@ func tick(delta: float, shelter: String, windbreak: bool, sprinting: bool) -> vo
 		if battery_charge <= 0: music_playing = false
 	for key in fires: fires[key] = maxf(float(fires[key]) - delta, 0.0)
 	var warm := not shelter.is_empty() and float(fires.get(shelter,0))>0
+	if clock_offset>0 and shelter=="lodge" and warm and temperature>=50 and not discovered.has("first_warmth"):discovered.append("first_warmth")
 	temperature += temperature_rate(shelter,windbreak) * delta
 	temperature = clampf(temperature,0,100)
 	stamina = clampf(stamina + delta * (-14.0 * (0.75 if effect == "tape_stride" else 1.0) if sprinting else (8.0 if hunger > 35 and thirst > 35 else (5.0 if hunger > 20 and thirst > 20 else 3.0))),0,100)
-	hunger = maxf(0,hunger - delta * (0.05 if sprinting else 0.027))
+	var food_rate:float=(.05+.025*DayCycle.cold(solar_time()) if clock_offset>0 else .027)
+	hunger = maxf(0,hunger - delta * ((food_rate*1.6 if clock_offset>0 else .05) if sprinting else food_rate))
 	thirst = maxf(0,thirst - delta * (0.065 if sprinting else 0.043))
 	energy = maxf(0,energy - delta * (0.035 if sprinting else 0.012))
 	if effect == "tape_home" and warm:
@@ -171,6 +179,23 @@ func light_fire(id: String) -> String:
 	wood -= 1
 	fires[id] = float(fires[id]) + 120
 	return "添入木柴。炉火增加 2 小时。"
+
+func lodge_board(action:String,shelter:String)->String:
+	if shelter!="lodge" or clock_offset<=0 or health<=0:return "需要在炭工木屋内检查挡风板。"
+	if action=="remove":
+		if discovered.has("lodge_board_removed"):return "挡风板已经拆下。"
+		if weight()+2*ITEMS.wood.weight>MAX_WEIGHT:return "需要先腾出两根木柴的负重空间。"
+		wood+=2;discovered.append("lodge_board_removed")
+		return "拆得两根木柴。墙缝开始漏风，火灭后会更冷。"
+	if action=="repair":
+		if not discovered.has("lodge_board_removed"):return "挡风板仍然完好。"
+		if wood<2 or count("cloth")<1:return "修复需要两根木柴和一份布料。"
+		wood-=2;items.cloth=count("cloth")-1;discovered.erase("lodge_board_removed")
+		return "重新封住墙缝。木屋恢复原有保暖能力。"
+	return "未知操作。"
+
+func morning_trace_visible()->bool:
+	return clock_offset>0 and (discovered.has("morning_tracks") or (discovered.has("first_rest") and DayCycle.day(solar_time())>=2 and DayCycle.hour(solar_time())>=6))
 
 func use_item(id: String) -> String:
 	if count(id) <= 0: return "背包里没有这件物品。"
@@ -286,6 +311,7 @@ func simulate_rest(shelter:String,hours:int)->Dictionary:
 		if health<=0:reason="没能挺过寒夜";break
 		if temperature<=18:reason="寒冷让你惊醒";break
 		if hunger<=5 or thirst<=5:reason="饥渴让你醒来";break
+	if clock_offset>0 and shelter=="lodge" and slept>=60 and not discovered.has("first_rest"):discovered.append("first_rest")
 	energy=minf(100,energy+18.0*slept/60.0)
 	stamina=100
 	return {"minutes":slept,"reason":reason}
@@ -296,13 +322,14 @@ func rest_preview(shelter:String,hours:int)->Dictionary:
 	var forecast=get_script().new()
 	forecast.restore(data())
 	var sleep:Dictionary=forecast.simulate_rest(shelter,hours)
-	return {"problem":"","minutes":sleep.minutes,"reason":sleep.reason,"clock":DayCycle.clock_text(forecast.elapsed),"temperature":forecast.temperature,"hunger_cost":hunger-forecast.hunger,"thirst_cost":thirst-forecast.thirst,"energy_gain":forecast.energy-energy,"fire_minutes":maxf(0,float(fires.get(shelter,0))-sleep.minutes),"fire_short":float(fires.get(shelter,0))<hours*60}
+	var fuel:float=float(fires.get(shelter,0))
+	return {"problem":"","minutes":sleep.minutes,"reason":sleep.reason,"clock":DayCycle.clock_text(forecast.solar_time()),"wake_day":DayCycle.day(forecast.solar_time()),"temperature":forecast.temperature,"hunger":forecast.hunger,"thirst":forecast.thirst,"hunger_cost":hunger-forecast.hunger,"thirst_cost":thirst-forecast.thirst,"energy_gain":forecast.energy-energy,"fire_minutes":maxf(0,fuel-sleep.minutes),"fire_short":fuel<hours*60,"fire_until":DayCycle.clock_text(solar_time()+fuel),"fire_day":DayCycle.day(solar_time()+fuel),"extra_wood":ceili(maxf(0,hours*60-fuel)/120.0)}
 
 func rest(shelter:String,hours:int=2)->String:
 	var problem:=rest_problem(shelter,hours)
 	if not problem.is_empty():return problem
 	var sleep:=simulate_rest(shelter,hours)
-	return "休息 %d 小时 %02d 分钟 · %s%s"%[sleep.minutes/60,sleep.minutes%60,DayCycle.clock_text(elapsed)," · "+sleep.reason if not sleep.reason.is_empty() else " · 已恢复精力"]
+	return "休息 %d 小时 %02d 分钟 · %s%s"%[sleep.minutes/60,sleep.minutes%60,DayCycle.clock_text(solar_time())," · "+sleep.reason if not sleep.reason.is_empty() else " · 已恢复精力"]
 
 func repair() -> bool:
 	if not parts or health<=0 or completed or chapter.radio_step>0: return false
@@ -312,10 +339,12 @@ func repair() -> bool:
 	return true
 
 func data() -> Dictionary:
-	return {"schema":7,"arrival_journey":arrival_journey,"supply_taken":supply_taken.duplicate(true),"placed_items":placed_items.duplicate(true),"placed_serial":placed_serial,"weather_profile":weather_profile,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
+	return {"schema":8,"clock_offset":clock_offset,"arrival_journey":arrival_journey,"supply_taken":supply_taken.duplicate(true),"placed_items":placed_items.duplicate(true),"placed_serial":placed_serial,"weather_profile":weather_profile,"field_kit":kit.data(),"chapter":chapter.duplicate(true),"temperature":temperature,"stamina":stamina,"health":health,"hunger":hunger,"thirst":thirst,"energy":energy,"elapsed":elapsed,"completed":completed,"items":items.duplicate(),"collected":collected.duplicate(),"discovered":discovered.duplicate(),"fires":fires.duplicate(),"upgrades":upgrades.duplicate(),"storage":storage.duplicate(),"structures":structures.duplicate(true),"battery_charge":battery_charge,"loaded_tape":loaded_tape,"music_playing":music_playing}
 
 func restore(d: Dictionary) -> bool:
 	if not ArrivalState.valid(d):return false
+	var offset:Variant=d.get("clock_offset",0.0)
+	if not (offset is int or offset is float) or not is_finite(float(offset)) or offset<0 or offset>=1440:return false
 	var weather:Variant=d.get("weather_profile",0)
 	if not (weather is int or weather is float) or (float(weather)!=0.0 and float(weather)!=1.0):return false
 	if d.has("field_kit") and not Kit.valid(d.field_kit):return false
@@ -367,7 +396,7 @@ func restore(d: Dictionary) -> bool:
 	kit=Kit.new()
 	if d.has("field_kit"):kit.restore(d.field_kit)
 	for key in ["temperature","stamina","health","hunger","thirst","energy","battery_charge"]: set(key,clampf(float(d.get(key,get(key))),0,100))
-	elapsed=clampf(float(d.elapsed),0,864000)
+	elapsed=clampf(float(d.elapsed),0,864000);clock_offset=float(offset)
 	chapter=Chapter.fresh()
 	if d.has("chapter"):chapter.merge(d.chapter.duplicate(true),true)
 	elif d.completed:

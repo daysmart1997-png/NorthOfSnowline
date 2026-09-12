@@ -7,8 +7,8 @@ const BACKDROP_GROUND:=16
 const SNOW_DETAIL:=32
 const BACKDROP_PLANE:=64
 const OUTDOOR_MARKERS:=128
-const OUTDOOR_VIEW:=OUTDOOR | ACTOR | 2 | 4 | 256 | 512 | SNOW_DETAIL | OUTDOOR_MARKERS
-const ROOMS:={"home":2,"station":4,"gatehouse":256,"lodge":512}
+const OUTDOOR_VIEW:=OUTDOOR | ACTOR | 2 | 4 | 256 | 512 | 1024 | 2048 | 4096 | SNOW_DETAIL | OUTDOOR_MARKERS
+const ROOMS:={"home":2,"station":4,"gatehouse":256,"lodge":512,"canteen":1024,"woodshed":2048,"bunkhouse":4096}
 const Arrival=preload("res://scripts/arrival_catalog.gd")
 const BuildingLayouts=preload("res://scripts/building_layouts.gd")
 var world:Node3D
@@ -50,6 +50,12 @@ func setup(w:Node3D,p:CharacterBody3D)->void:
 		if visual is Label3D and assigned.is_empty():visual.layers=OUTDOOR_MARKERS
 		if visual is MeshInstance3D and visual.material_override in [world.snow_surface,world.detail_surface]:visual.layers=SNOW_DETAIL
 	for visual in player.find_children("*","VisualInstance3D",true,false):visual.layers=ACTOR
+	for id in ROOMS:
+		if not world.fire_lights.has(id):continue
+		var light:OmniLight3D=world.fire_lights[id]
+		light.shadow_caster_mask=int(ROOMS[id]) | ACTOR
+		light.shadow_bias=.08;light.shadow_normal_bias=.6
+		light.shadow_opacity=.72
 	build_backdrop()
 	update()
 
@@ -102,7 +108,14 @@ func update()->void:
 	var indoors:=not display_room.is_empty()
 	player.camera.cull_mask=ACTOR | BACKDROP_PLANE | int(ROOMS[display_room]) if indoors else OUTDOOR_VIEW
 	player.camera.environment=indoor_environment if indoors else null
-	indoor_environment.ambient_light_energy=clampf(world.env.ambient_light_energy*1.65,.36,.70)
+	indoor_environment.ambient_light_energy=clampf(world.env.ambient_light_energy*1.4,.42,.62)
+	# Only the occupied room spends an omni shadow pass. Trees outside the
+	# cutaway cannot cast into it, and an extinguished stove casts nothing.
+	for id in ROOMS:
+		if not world.fire_lights.has(id):continue
+		var light:OmniLight3D=world.fire_lights[id]
+		var needs_shadow:bool=indoors and display_room==id and light.light_energy>0
+		if light.shadow_enabled!=needs_shadow:light.shadow_enabled=needs_shadow
 	# The exterior camera gets the real day/weather. The room gets its own lamps,
 	# so tree silhouettes cannot project through the cutaway roof.
 	world.sun.visible=true;world.night_fill.visible=true

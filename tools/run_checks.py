@@ -8,6 +8,12 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKS = {
+    "hearth": (["--fixed-fps", "60", "--quit-after", "2400", "tools/hearth_check.tscn", "--", "--isolated-settings"], "HEARTH_OK"),
+    "night_choice": (["--fixed-fps", "60", "--quit-after", "5000", "tools/night_choice_check.tscn", "--", "--isolated-settings"], "NIGHT_CHOICE_OK"),
+    "return_guidance": (["--fixed-fps", "60", "--quit-after", "5000", "tools/return_guidance_check.tscn", "--", "--isolated-settings"], "RETURN_GUIDANCE_OK"),
+    "preparation": (["--fixed-fps", "60", "--quit-after", "1800", "tools/preparation_check.tscn", "--", "--isolated-settings"], "PREPARATION_OK"),
+    "first_night": (["--fixed-fps", "60", "--quit-after", "22000", "tools/first_night_check.tscn", "--", "--isolated-settings"], "FIRST_NIGHT_OK"),
+    "title": (["--fixed-fps", "60", "--quit-after", "1800", "tools/title_check.tscn", "--", "--isolated-settings"], "TITLE_CHECK_OK"),
     "lodge": (["--fixed-fps", "60", "--quit-after", "12000", "tools/lodge_check.tscn", "--", "--isolated-settings"], "LODGE_CHECK_OK"),
     "mountain": (["--fixed-fps", "60", "--quit-after", "12000", "tools/mountain_check.tscn", "--", "--isolated-settings"], "MOUNTAIN_CHECK_OK"),
     "arrival_presentation": (["--fixed-fps", "60", "--quit-after", "6000", "tools/arrival_presentation.tscn", "--", "--isolated-settings"], "ARRIVAL_PRESENTATION_OK"),

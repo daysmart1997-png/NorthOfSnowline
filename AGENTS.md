@@ -12,6 +12,7 @@
 - Godot 4 项目，GDScript、Compatibility 渲染、固定斜俯视正交镜头。延续冷灰蓝雪林、克制的暖灯、风化木材与帆布风格。
 - 当前入口 scripts/main.gd；当前世界为 world_frontier.gd，角色为 player_ranger.gd。旧基类仍被继承，不可按文件版本名字直接删除。
 - 生存规则主要位于 expedition.gd。不要让 UI 各自维护另一份背包或生存状态。
+- 后续试玩版优化按 docs/40_DEMO_QUALITY_ROADMAP.md 的优先级与验收标准推进；每轮记录玩家体验改善及证据，区分自动化通过、实际渲染检查和陌生玩家试玩。
 - Blender 源文件放 source_art/，游戏导出资源放 assets/；修改模型时同一提交包含源文件、导出文件及必要 .import 设置。
 - .blend、.glb、位图与音视频走 Git LFS。不要把大二进制转换成普通 Git 文件；不要手动编辑 LFS 指针来代替真实资源。
 - .godot 缓存不得提交；*.uid、资源旁 *.import 和各目录 .gdignore 必须保留。
